@@ -29,35 +29,39 @@ already set for you. If not, then set it manually.
 import os
 from os.path import abspath, dirname
 import sys
-import importlib
 import shutil
-import boto
-from fabric.api import env, put, run, local, settings 
+from fabric.api import env, put, run, local, settings, hide
 from fabric.context_managers import cd, lcd
-from fabric.contrib.files import exists
 from fabric.tasks import execute
 from fabric.decorators import roles, runs_once, task
+from fabric.operations import prompt
 from .decorators import require_settings
-from .utils import run_in_ve
-from .utils import notice, warn, abort, path, do, confirm
-from . import apache, aws, db
+from .fos import clean, exists, join
+from .utils import notice, warn, abort, do, confirm, run_in_ve
+from . import aws, git
     
+
 env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[]}
 
-env.s3cmd_cfg = path(dirname(dirname(abspath(__file__))), 
+# Path to s3cmd.cnf in secrets repository
+env.s3cmd_cfg = join(dirname(dirname(abspath(__file__))), 
     'secrets', 's3cmd.cfg')
 if not os.path.exists(env.s3cmd_cfg):
     abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
 
-def _run_in_ve_local(command):
-    """
-    Execute the command inside the local virtialenv.
-    This is some hacky stuff that is only used in deploystatic.
-    """
-    cur_settings = env.settings
-    loc()
-    run_in_ve(command)
-    globals()[cur_settings]()  
+# STATIC or DYNAMIC? look for config.json
+config_json_path = join(dirname(dirname(os.path.abspath(__file__))), 
+            env.project_name, 'config.json')  
+
+STATIC = os.path.exists(config_json_path)
+DYNAMIC = not STATIC
+
+
+@task
+def dump():
+    """Dump env to stdout"""
+    import pprint
+    pprint.pprint(env)
 
 ############################################################
 # Environment
@@ -73,233 +77,329 @@ def _setup_env(env_type):
         env.doit = local    # run/local
         
         # base paths
-        env.home_path = path('/Users', env.local_user)
+        env.home_path = join('/Users', env.local_user)
         env.env_path = os.getenv('WORKON_HOME') or \
             _abort("You must set the WORKON_HOME environment variable to the" \
                 " root directory for your virtual environments.")       
-        env.project_path = path(dirname(dirname(os.path.abspath(__file__))), 
-            env.project_name)        
-            
-        # roledefs    
-        env.roledefs = {
-            'app': ['localhost'],
-            'work': [],
-            'pgis': ['localhost'],
-            'mongo': ['localhost']
-        }
+        env.sites_path = dirname(dirname(os.path.abspath(__file__)))
+        env.project_path = join(env.sites_path, env.project_name)
+        
+        env.roledefs = {'app': ['localhost'], 'work': []}
     else:
         env.doit = run      # run/local
 
         # base paths
-        env.home_path = path('/home', env.app_user)
-        env.env_path = path(env.home_path, 'env')
-        env.sites_path = path(env.home_path, 'sites')
-        env.project_path = path(env.sites_path, env.project_name)
+        env.home_path = join('/home', env.app_user)
+        env.env_path = join(env.home_path, 'env')
+        env.sites_path = join(env.home_path, 'sites')
+        env.project_path = join(env.sites_path, env.project_name)
         
-        # roledefs
         if not env.hosts:
             aws.lookup_ec2_instances()
     
-    env.ssh_path = path(env.home_path, '.ssh')
-    env.log_path = path(env.home_path, 'log', env.project_name)
-    env.apache_path = path(env.home_path, 'apache')   
-    env.ve_path = path(env.env_path, env.project_name)
-    env.activate_path = path(env.ve_path, 'bin', 'activate') 
-    env.conf_path = path(env.project_path, 'conf')
-    env.data_path = path(env.project_path, 'data')
-
-    # Load db module into env.db
-    db.load_module()
+    env.log_path = join(env.home_path, 'log', env.project_name)
+    env.apache_path = join(env.home_path, 'apache')   
+    env.ve_path = join(env.env_path, env.project_name)
+    env.activate_path = join(env.ve_path, 'bin', 'activate') 
+    env.data_path = join(env.project_path, 'data')
     
-@task
-def prd():
-    """Work on production environment."""
-    _setup_env('prd')
-    env.aws_storage_bucket = 'media.knightlab.com/%(project_name)s' % env
-    
-@task
-def stg():
-    """Work on staging environment."""
-    _setup_env('stg')
-    #env.aws_storage_bucket = 'media.knilab.com/%(project_name)s' % env
-    env.aws_storage_bucket = 'test.knilab.com/%(project_name)s' % env
-@task
-def loc():
-    """Work on local environment."""
-    _setup_env('loc')    
+    if STATIC:
+        env.build_path = join(env.project_path, 'build')
+        env.source_path = join(env.project_path, 'source')           
+    else:
+        # Load db module into env.db
+        db.load_module()
 
-############################################################
-# Setup
-############################################################
-
-@require_settings(allow=['stg','prd'])
-def _setup_ssh():
-    with cd(env.ssh_path):
-        if not exists('known_hosts'):
-            aws.copy_from_s3('knightlab.ops', 'deploy/ssh/known_hosts',
-                path(env.ssh_path, 'known_hosts'))
-        if not exists('config'):
-            aws.copy_from_s3('knightlab.ops', 'deploy/ssh/config',
-                path(env.ssh_path, 'config'))
-        if not exists('github.key'):
-            aws.copy_from_s3('knightlab.ops', 'deploy/ssh/github.key',
-                path(env.ssh_path, 'github.key'))
-            with cd(env.ssh_path):
-                run('chmod 0600 github.key')
-
-@require_settings(allow=['stg','prd'])
-def _setup_directories():
-    run('mkdir -p %(sites_path)s' % env)
-    run('mkdir -p %(log_path)s' %env)
-    run('mkdir -p %(ve_path)s' % env)
-
-@require_settings(allow=['stg','prd'])
-def _clone_repo():
-    """Clone the git repository."""
-    run('git clone %(repo_url)s %(project_path)s' % env)
-
-@require_settings(allow=['stg','prd'])
-def _setup_virtualenv():
-    """Create a virtualenvironment."""
-    run('virtualenv -p %(python)s %(ve_path)s' % env)
-
-@require_settings(allow=['stg','prd'])
-def _build_django_siteconf():
-    chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'
-    secret_key = ''.join([choice(chars) for i in range(50)])
-    run("""echo "SECRET_KEY='%s'" >> %s""" % (secret_key,
-        os.path.join(env.project_path, 'core', 'settings', 'site.py')))
-
-@roles('app','work')
-@require_settings(allow=['stg','prd'])
-def _install_requirements():
-    with cd(env.project_path):
-        if exists('requirements.txt'):
-            run_in_ve('pip install -r requirements.txt')
-      
-@task      
-@roles('app','work')
-@require_settings                    
-def setup_project():
-    """Setup project"""
-    _setup_ssh()
-    _setup_directories()
-    _clone_repo()
-    _setup_virtualenv()
-    _build_django_siteconf()   
-    _install_requirements()
-       
-@task
-@roles('app','work')
-@require_settings                    
-def setup(sample='n'):
-    """Setup application deployment."""    
-    execute(setup_project)
-    execute(db.setup, sample=sample)     
-    execute(apache.link_conf)
-    
-    
-############################################################
-# Deploy
-############################################################
-
-@task
-@roles('app', 'work')    
-@require_settings                    
-def checkout():
-    """Pull the latest code from github."""
-    env.doit('cd %(project_path)s; git pull' % env)    
-
-@task
-@runs_once
-@require_settings(allow=['prd','stg'], verbose=True)
-def deploystatic(force='n'):
+def _run_in_ve_local(command):
     """
-    Sync local static files to S3.  Does not perform server operations.  
-    Requires that the local git repository has no uncommitted changes.  
-    If django flag is set, will use collectstatic to move assets into a
-    temporary directory, which will then be synced.  Else, syncs the
-    'static' directory within the project repository.
+    Execute the command inside the local virtialenv.
+    This is some hacky stuff that is only used in deploystatic.
     """
-    git_status = os.popen('git status').read()
-    ready_status = '# On branch master\nnothing to commit'
- 
-    if not do(force) and not git_status.startswith(ready_status):    
-        abort('You have uncommitted local code changes. ' \
-            'Please commit and push changes before deploying to S3.')      
+    cur_settings = env.settings
+    loc()
+    run_in_ve(command)
+    globals()[cur_settings]()  
 
-    print 'deploystatic to S3 ...'
+def s3cmd_sync(src_path, bucket):
+    """Sync local directory with S3 bucket"""
     repo_dir = dirname(dirname(os.path.abspath(__file__)))
     
-    if env.django:
-        mod = importlib.import_module('.deploystatic_settings', 'fablib')       
-        static_root = mod.STATIC_ROOT     
-        
-        if os.path.exists(static_root):
-            shutil.rmtree(static_root)        
-        _run_in_ve_local('python manage.py collectstatic ' + \
-            '--pythonpath="%s" ' \
-            '--settings=fablib.deploystatic_settings' % repo_dir)
-    else:
-        static_root = path(repo_dir, env.project_name, 'static')
-            
     with lcd(repo_dir):
-        local('fablib/bin/s3cmd --config=%s sync' \
+        local('fabfile/bin/s3cmd --config=%s sync' \
                 ' --rexclude ".*/\.[^/]*$"' \
                 ' --delete-removed --acl-public' \
                 ' %s/ s3://%s/' \
-                % (env.s3cmd_cfg, static_root, env.aws_storage_bucket)) 
+                % (env.s3cmd_cfg, src_path, bucket)
+            )
+  
+############################################################
+# Dynamic sites
+############################################################
+if DYNAMIC:
+    from . import apache, db, ec2
+    from . import collectstatic_settings
+
+    @task
+    def prd():
+        """Work on production environment."""
+        _setup_env('prd')
+        env.aws_storage_bucket = 'media.knightlab.com/%(project_name)s' % env
     
-    if env.django and os.path.exists(static_root):
-        shutil.rmtree(static_root)        
-                         
- 
-@task  
-@require_settings(allow=['prd','stg'], verbose=True)
-def deploy(mro='y', requirements='y', static='y', restart='y'):
-    """
-    Deploy latest version of application to the server(s).
-    """
-    if do(mro):
-        execute(apache.mrostart)
-    execute(checkout)
-    if do(requirements):
-        execute(_install_requirements)
-    if do(static):
-        execute(deploystatic)
-    if do(restart):
-        if do(mro):
-            execute(apache.mrostop)
+    @task
+    def stg():
+        """Work on staging environment."""
+        _setup_env('stg')
+        #env.aws_storage_bucket = 'media.knilab.com/%(project_name)s' % env
+        env.aws_storage_bucket = 'test.knilab.com/%(project_name)s' % env
+    @task
+    def loc():
+        """Work on local environment."""
+        _setup_env('loc')    
+
+    @task      
+    @roles('app','work')
+    @require_settings(allow=['stg','prd'])                    
+    def setup_project():
+        """Setup project environment"""
+        ec2.setup_ssh()
+        ec2.setup_directories()
+        git.clone_repo()
+        ec2.setup_virtualenv()
+        ec2.build_django_siteconf()   
+        ec2.install_requirements()
+
+    @task
+    @roles('app','work')
+    @require_settings                    
+    def setup(sample='n'):
+        """Setup deployment."""    
+        execute(setup_project)
+        execute(db.setup, sample=sample)     
+        execute(apache.link_conf)
+
+    @task
+    @runs_once
+    @require_settings(allow=['prd','stg'], verbose=True)
+    def deploy_static(force='n'):
+        """
+        Sync local static files to S3.  Does not perform server operations.  
+        If django flag is set, will use collectstatic to move assets into a
+        temporary directory, which will then be synced.  Else, syncs the
+        'static' directory within the project repository.
+        """
+        git.check_clean(force=do(force))
+
+        print 'deploystatic to S3 ...'
+        repo_dir = dirname(dirname(os.path.abspath(__file__)))
+    
+        if env.django:
+            static_root = collectstatic_settings.STATIC_ROOT     
+        
+            if os.path.exists(static_root):
+                shutil.rmtree(static_root)        
+            _run_in_ve_local('python manage.py collectstatic ' + \
+                '--pythonpath="%s" ' \
+                '--settings=fablib.collectstatic_settings' % repo_dir)
         else:
-            execute(apache.restart)
- 
+            static_root = join(repo_dir, env.project_name, 'static')
+    
+        s3cmd_sync(static_root, env.aws_storage_bucket)
+            
+        if env.django and os.path.exists(static_root):
+            shutil.rmtree(static_root)        
+
+    @task  
+    @require_settings(allow=['prd','stg'], verbose=True)
+    def deploy(mro='y', requirements='y', static='y', restart='y'):
+        """
+        Deploy latest version of application to the server(s).
+        """
+        if do(mro):
+            execute(apache.mrostart)
+        git.checkout()
+        if do(requirements):
+            execute(_install_requirements)
+        if do(static):
+            execute(deploy_static)
+        if do(restart):
+            if do(mro):
+                execute(apache.mrostop)
+            else:
+                execute(apache.restart)
+
+    @task
+    @roles('app', 'work')
+    @require_settings(allow=['prd','stg'], verbose=True)
+    def destroy_project():
+        """Remove project environment."""
+        warn('This will remove all %(project_name)s project files for' \
+            ' %(settings)s on %(host)s.')
+        if not confirm('Continue? (y/n)'):
+            abort('Cancelling')
+
+        execute(apache.unlink_conf)
+    
+        run('rm -rf %(project_path)s' % env) 
+        run('rm -rf %(log_path)s' % env) 
+        run('rm -rf %(ve_path)s' % env)
+
+    @task    
+    @require_settings
+    def destroy():
+        """Remove project environment and databases."""
+        execute(destroy_project)
+        execute(db.destroy)
+        
+############################################################
+# Static sites
+############################################################
+else:
+    from . import static
+        
+    _setup_env('loc')      
+    _config = static.load_config()
+
+    # Path to cdn deployment
+    env.cdn_path = abspath(join(env.sites_path, 'cdn.knightlab.com', 
+        'app', 'libs', _config['name']))
+    
+    @task
+    def debug():
+        """Setup debug settings"""
+        warn('DEBUG IS ON:')
+        _config['deploy']['bucket'] = 'test.knilab.com'
+        _config['version'] = '0.0.0'
+     
+        print 'deploy.bucket:', _config['deploy']['bucket']
+        print 'version:', _config['version']
+        print 'version tagging is OFF'
+        print ''
+    
+        if do(prompt("Continue? (y/n): ").strip()):
+            abort('Aborting.')       
+        env.debug = True
+            
+    @task
+    def serve():
+        """Run the development server"""
+        with lcd(join(env.project_path)):
+            local('python website/app.py')
+     
+    @task
+    def build():
+        """Build version"""   
+        # Get build config
+        if not 'build' in _config:
+            abort('Could not find "build" in config file')
+      
+        # Determine version
+        if not 'version' in _config:
+            _config['version'] = git.last_tag()
+        if not _config['version']:
+            abort('No available version tag')      
+    
+        notice('Building version %(version)s...' % _config)
+
+        # Clean build directory
+        static.clean(env.build_path)
+
+        for key, param in _config['build'].iteritems():
+            getattr(sys.modules[__name__], key)(_config, param)
            
-@task
-@roles('app', 'work')
-@require_settings(allow=['prd','stg'], verbose=True)
-def destroy_project():
-    """Remove project environment."""
-    warn('This will remove all %(project_name)s project files for' \
-        ' %(settings)s on %(host)s.')
-    if not confirm('Continue? (y/n)'):
-        abort('Cancelling')
+    @task
+    def stage():
+        """Build version, copy to local cdn repository, tag last commit"""    
+        if not 'stage' in _config:
+            abort('Could not find "stage" in config file')
 
-    execute(apache.unlink_conf)
+        # Make sure cdn exists
+        exists(dirname(env.cdn_path), required=True)
     
-    run('rm -rf %(project_path)s' % env) 
-    run('rm -rf %(log_path)s' % env) 
-    run('rm -rf %(ve_path)s' % env)
+        # Ask user for a new version
+        if not env.debug:
+            _config['version'] = git.prompt_tag()     
+  
+        build()
     
-@task    
-@require_settings
-def destroy():
-    """Remove project environment and databases."""
-    execute(destroy_project)
-    execute(db.destroy)
+        cdn_path = join(env.cdn_path, _config['version'])
+        clean(cdn_path)
     
+        for r in _config['stage']:
+            static.copy([{
+                "src": r['src'],
+                 "dst": cdn_path, "regex": r['regex']
+            }])
+        
+        if not env.debug:
+            with lcd(env.project_path):
+                local('git tag %(version)s' % _config)
+                local('git push origin %(version)s' % _config)           
+    
+    @task
+    def stage_latest():
+        """Copy version to latest within local cdn repository"""
+        if 'version' in _config:
+            version = _config['version']
+        else:
+            tag_list = git.tags()
+            puts('This project has the following tags:')
+            puts(tag_list)
+    
+            while True:
+                version = prompt("Which version to stage as 'latest'? ").strip()        
+                if not version in tag_list:
+                    warn('You must enter an existing version')
+                else:
+                    break
+    
+        notice('stage_latest: %s' % version)
+    
+        # Make sure version has been staged
+        version_cdn_path = join(env.cdn_path, version)
+        if not os.path.exists(version_cdn_path): 
+            abort("Version '%s' has not been staged" % version)
+      
+        # Stage version as latest           
+        latest_cdn_path = join(env.cdn_path, 'latest')
+        clean(latest_cdn_path)
+        static.copy([{"src": version_cdn_path, "dst": latest_cdn_path}])
 
+
+    @task
+    def deploy():
+        """Deploy to S3 bucket"""
+        if not 'deploy' in CONFIG:
+            abort('Could not find "deploy" in config file')
+    
+        # Do we need to build anything here?!?     
+    
+        template_path = join(env.project_path, 'website', 'templates')
+        deploy_path = join(env.project_path, 'build', 'website')
+    
+        static.clean(deploy_path)
+    
+        # render templates and run usemin
+        static.render_templates(template_path, deploy_path)   
+        static.usemin([deploy_path])
+    
+        # copy static files
+        static.copy([{
+            "src": join(env.project_path, 'website', 'static'),
+            "dst": join(deploy_path, 'static')
+        }])
+    
+        # additional copy?
+        if 'copy' in _config['deploy']:
+            static.copy(_config['deploy']['copy'])
+   
+        # sync to S3
+        s3cmd_sync(deploy_path, _config['deploy']['bucket'])
+ 
+       
+       
 @task
-def dump():
-    """Dump env to stdout"""
-    import pprint
-    pprint.pprint(env)
+@roles('app')
+def test(force='n'):
+    git.prompt_tag()
+                  
+      

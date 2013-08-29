@@ -56,7 +56,8 @@ import importlib
 import sys
 import re
 from ..decorators import require_settings
-from ..utils import confirm, do, ls, notice, path, run_in_ve, warn
+from ..fos import join, ls
+from ..utils import confirm, do, notice, run_in_ve, warn
 
 class FablibDbTypeError(Exception):
     pass
@@ -116,13 +117,13 @@ def seed(sample='n'):
     Seed the database.  Set sample=y to load sample data (default = n).
     Must be run from the app or work server to pipe data.
     """
-    d = path(env.data_path, 'db', env.db_type, 'seed')   
+    d = join(env.data_path, 'db', env.db_type, 'seed')   
     if exists(d):
         files = ls(d)     
         for f in files:
             env.db.pipe_data(f)                    
                         
-    d = path(env.data_path, 'db', env.db_type, 'sample')
+    d = join(env.data_path, 'db', env.db_type, 'sample')
     if do(sample) and exists(d):
         files = ls(d)     
         print files   

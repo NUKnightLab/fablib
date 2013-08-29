@@ -27,18 +27,6 @@ def abort(msg):
     """Show red error message and abort."""      
     fabric.utils.abort(red(msg % env))
 
-def path(*args):
-    """Join paths."""
-    return os.path.join(*args)
-
-def ls(d):
-    """Get a directory listing for directory d."""
-    if env.settings == 'loc':
-        return [path(d, f) for f in env.doit("ls -1 %s" % d,
-            capture=True).splitlines()] 
-    else:
-        return [path(d, f) for f in env.doit("ls -1 %s" % d).splitlines()] 
-
 def do(yes_no):
     """Boolean for yes/no values."""
     return yes_no.lower().startswith('y')
