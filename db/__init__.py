@@ -51,11 +51,12 @@ module name:
 from fabric.api import env
 from fabric.contrib.files import exists
 from fabric.context_managers import cd
+from fabric.decorators import roles, runs_once, task
 import importlib
 import sys
 import re
 from ..decorators import require_settings
-from ..utils import do, ls, notice, path, run_in_ve, warn
+from ..utils import confirm, do, ls, notice, path, run_in_ve, warn
 
 class FablibDbTypeError(Exception):
     pass
@@ -127,3 +128,26 @@ def seed(sample='n'):
         print files   
         for f in files:
             env.db.pipe_data(f)
+
+@task
+@roles('app')
+@runs_once
+@require_settings
+def setup(sample='n'):
+    """Setup database and user."""
+    env.db.setup()
+    env.db.sync()
+    env.db.seed(sample=sample)      
+
+@task
+@roles('app')
+@runs_once
+@require_settings
+def destroy():
+    """Remove the database and user."""
+    warn('This will delete the "%(db_name)s" database and "%(db_user)s" ' \
+         'database user for %(settings)s on %(db_host)s.')        
+    if not confirm('Continue? (y/n) ' % env):
+        abort('Aborting.')
+
+    env.db.destroy()

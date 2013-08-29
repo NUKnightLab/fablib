@@ -188,23 +188,14 @@ def setup_project():
     _setup_virtualenv()
     _build_django_siteconf()   
     _install_requirements()
-   
+       
 @task
-@roles('app')
-@runs_once
-@require_settings
-def setup_db(sample='n'):
-    """Setup database."""
-    execute(env.db.setup)
-    execute(env.db.sync)
-    execute(env.db.seed, sample=sample)      
-    
-@task
+@roles('app','work')
 @require_settings                    
 def setup(sample='n'):
     """Setup application deployment."""    
     execute(setup_project)
-    execute(setup_db, sample=sample)     
+    execute(db.setup, sample=sample)     
     execute(apache.link_conf)
     
     
@@ -298,26 +289,13 @@ def destroy_project():
     run('rm -rf %(project_path)s' % env) 
     run('rm -rf %(log_path)s' % env) 
     run('rm -rf %(ve_path)s' % env)
-
-@task
-@roles('app', 'work')
-@runs_once
-@require_settings
-def destroy_db():
-    """Remove the database and user."""
-    warn('This will delete the "%(db_name)s" database and "%(db_user)s" ' \
-         'database user for %(settings)s on %(db_host)s.')        
-    if not confirm('Continue? (y/n) ' % env):
-        abort('Aborting.')
-
-    execute(env.db.destroy)
     
 @task    
 @require_settings
 def destroy():
     """Remove project environment and databases."""
     execute(destroy_project)
-    execute(destroy_db)
+    execute(db.destroy)
     
 
 @task
