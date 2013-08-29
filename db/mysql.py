@@ -1,20 +1,19 @@
 """
-postgres/postgis 
+mysql
 
 seed data:
-    <project>/data/db/postgis/seed/
+    <project>/data/db/mysql/seed/
     
 sample data:
-    <project>/data/db/postgis/sample/
+    <project>/data/db/mysql/sample/
     
-See _psql_pipe_data() for acceptable formats and file-naming conventions.
+See pipe_data() for acceptable formats and file-naming conventions.
 """
 from fabric.api import env, settings, hide
 from fabric.contrib.files import exists
-from fabric.decorators import roles, runs_once
 import os
-from ..utils import notice, warn, abort, path, ls, do, confirm
-from . import django_sync
+from ..utils import notice, warn
+from . import sync, seed
 
 
 def _mysql(cmd, user= '', prefix=''):
@@ -33,7 +32,7 @@ def _user_exists():
         result = _mysql('-e "SELECT User FROM mysql.user;" | grep "^%(db_user)s$"')
     return not result.failed
        
-def _pipe_data(file_path):
+def pipe_data(file_path):
     """
     Pipe data from a file to the db.  Valid types of files:
     
@@ -70,8 +69,6 @@ def setup_env(conf):
     else:
         env.db_root_user = 'root'
  
-@roles('app')
-@runs_once    
 def setup():
     """
     Create the project database and user.
@@ -80,58 +77,28 @@ def setup():
     if _db_exists():
         notice('Database "%(db_name)s" exists on host %(db_host)s' % env)
     else:
-        notice('Creating "%(db_name)s"' % env)
+        notice('Creating db "%(db_name)s"' % env)
         _mysql('-e "CREATE DATABASE %(db_name)s;"')
          
     # Create the database user
     if _user_exists():
         notice('Database user "%(db_user)s" exists on host %(db_host)s' % env)
     else:
-        _mysql('-e "CREATE USER \'%(db_user)s\'@\'%\';"')
-        _mysql('-e "GRANT ALL PRIVILEGES ON %(db_name)s.* TO \'%(db_user)s\'@\'%\';"')        
-
-@roles('app', 'work')
-@runs_once
-def sync():
-    django_sync()
-
-@roles('app', 'work')
-@runs_once
-def seed(sample='n'):
-    """
-    Seed the database.  Set sample=y to load sample data (default = n).
-    Must be run from the app or work server to pipe data to mysql.
-    """
-    d = path(env.data_path, 'db', 'mysql', 'seed')   
-    if exists(d):
-        files = ls(d)     
-        for f in files:
-            _pipe_data(f)                    
-                        
-    d = path(env.data_path, 'db', 'mysql', 'sample')
-    if do(sample) and exists(d):
-        files = ls(d)        
-        for f in files:
-            _pipe_data(f)
+        notice('Creating db user "%(db_user)s"' % env)
+        _mysql('-e "CREATE USER \'%(db_user)s\'@\'%%\';"')
+        _mysql('-e "GRANT ALL PRIVILEGES ON %(db_name)s.* TO \'%(db_user)s\'@\'%%\';"')        
     
-@roles('app', 'work')
-@runs_once
 def destroy():
     """Remove the database and user."""   
-    warn('This will delete the %(db_name)s db and %(db_user)s user ' \
-        'for %(settings)s on %(db_host)s.')        
-    if not confirm('Continue? (y/n) ' % env):
-        abort('Cancelling')
-
     if _user_exists():
-        notice('Dropping user %(db_user)s' % env)
-        _mysql('-e "DROP USER \'%(db_user)s;\'"')
+        notice('Dropping user "%(db_user)s"' % env)
+        _mysql('-e "DROP USER \'%(db_user)s\';"')
     else:
-        notice('Database user %(db_user)s does not exist' % env)        
+        notice('Database user "%(db_user)s" does not exist' % env)        
     
     if _db_exists():
-        notice('Dropping database %(db_name)s' % env)
+        notice('Dropping database "%(db_name)s"' % env)
         _mysql('-e "DROP DATABASE %(db_name)s;"')
     else:
-        notice('Database %(db_name)s does not exist' % env)    
+        notice('Database "%(db_name)s" does not exist' % env)    
 

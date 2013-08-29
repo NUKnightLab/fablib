@@ -59,14 +59,6 @@ def _run_in_ve_local(command):
     run_in_ve(command)
     globals()[cur_settings]()  
 
-@require_settings(allow=['stg','prd'])
-def _build_django_siteconf():
-    chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'
-    secret_key = ''.join([choice(chars) for i in range(50)])
-    run("""echo "SECRET_KEY='%s'" >> %s""" % (secret_key,
-        os.path.join(env.project_path, 'core', 'settings', 'site.py')))
-
-
 ############################################################
 # Environment
 ############################################################
@@ -85,8 +77,8 @@ def _setup_env(env_type):
         env.env_path = os.getenv('WORKON_HOME') or \
             _abort("You must set the WORKON_HOME environment variable to the" \
                 " root directory for your virtual environments.")       
-        env.project_path = path(os.path.dirname(os.path.abspath(__file__)), 
-            env.project_name)
+        env.project_path = path(dirname(dirname(os.path.abspath(__file__))), 
+            env.project_name)        
             
         # roledefs    
         env.roledefs = {
@@ -171,6 +163,13 @@ def _setup_virtualenv():
     """Create a virtualenvironment."""
     run('virtualenv -p %(python)s %(ve_path)s' % env)
 
+@require_settings(allow=['stg','prd'])
+def _build_django_siteconf():
+    chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'
+    secret_key = ''.join([choice(chars) for i in range(50)])
+    run("""echo "SECRET_KEY='%s'" >> %s""" % (secret_key,
+        os.path.join(env.project_path, 'core', 'settings', 'site.py')))
+
 @roles('app','work')
 @require_settings(allow=['stg','prd'])
 def _install_requirements():
@@ -191,6 +190,8 @@ def setup_project():
     _install_requirements()
    
 @task
+@roles('app')
+@runs_once
 @require_settings
 def setup_db(sample='n'):
     """Setup database."""
@@ -203,9 +204,7 @@ def setup_db(sample='n'):
 def setup(sample='n'):
     """Setup application deployment."""    
     execute(setup_project)
-    execute(env.db.setup)
-    execute(env.db.sync)
-    execute(env.db.seed, sample=sample)      
+    execute(setup_db, sample=sample)     
     execute(apache.link_conf)
     
     
@@ -284,6 +283,7 @@ def deploy(mro='y', requirements='y', static='y', restart='y'):
             execute(apache.restart)
  
            
+@task
 @roles('app', 'work')
 @require_settings(allow=['prd','stg'], verbose=True)
 def destroy_project():
@@ -299,13 +299,25 @@ def destroy_project():
     run('rm -rf %(log_path)s' % env) 
     run('rm -rf %(ve_path)s' % env)
 
-         
+@task
+@roles('app', 'work')
+@runs_once
+@require_settings
+def destroy_db():
+    """Remove the database and user."""
+    warn('This will delete the "%(db_name)s" database and "%(db_user)s" ' \
+         'database user for %(settings)s on %(db_host)s.')        
+    if not confirm('Continue? (y/n) ' % env):
+        abort('Aborting.')
+
+    execute(env.db.destroy)
+    
 @task    
 @require_settings
 def destroy():
     """Remove project environment and databases."""
     execute(destroy_project)
-    execute(env.db.destroy)
+    execute(destroy_db)
     
 
 @task

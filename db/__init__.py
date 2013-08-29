@@ -26,15 +26,14 @@ attribute follows the Django convention:
 Each module should define these public methods:
 
     setup_env(conf)
-        Set any necessary variables in env (e.g. filepath, system user)
+        Set any db-specific variables in env
         
     setup()
         Create the project database and user.
         
     sync()
         Setup the database tables.  If this is a django project, then
-        you should use the syncdb command, so just call django_sync in
-        this file.
+        you should just import the sync method below.
     
     seed(sample='n')
         Seed the database with any necessary data.  If sample=y, then also
@@ -46,16 +45,17 @@ Each module should define these public methods:
 Related data files should be placed in a subdirectory named according to the 
 module name:
 
-    <project>/data/db/<module name>
+    <project>/data/db/<module name>/seed/
+    <project>/data/db/<module name>/sample/
 """
-
 from fabric.api import env
+from fabric.contrib.files import exists
 from fabric.context_managers import cd
 import importlib
 import sys
 import re
 from ..decorators import require_settings
-from ..utils import run_in_ve, notice, warn
+from ..utils import do, ls, notice, path, run_in_ve, warn
 
 class FablibDbTypeError(Exception):
     pass
@@ -102,11 +102,28 @@ def load_module():
         warn('Could not import settings module "%s": %s' % (mod_name, e))
 
 @require_settings
-def django_sync():
+def sync():
     """Sync the database using the Django syncdb command."""
     if env.django:
         with cd(env.project_path):
             run_in_ve('python manage.py syncdb ' \
                 '--settings=core.settings.%(settings)s' % env)
            
-           
+@require_settings
+def seed(sample='n'):
+    """
+    Seed the database.  Set sample=y to load sample data (default = n).
+    Must be run from the app or work server to pipe data.
+    """
+    d = path(env.data_path, 'db', env.db_type, 'seed')   
+    if exists(d):
+        files = ls(d)     
+        for f in files:
+            env.db.pipe_data(f)                    
+                        
+    d = path(env.data_path, 'db', env.db_type, 'sample')
+    if do(sample) and exists(d):
+        files = ls(d)     
+        print files   
+        for f in files:
+            env.db.pipe_data(f)

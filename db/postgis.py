@@ -7,14 +7,13 @@ seed data:
 sample data:
     <project>/data/db/postgis/sample/
     
-See _pipe_data() for acceptable formats and file-naming conventions.
+See pipe_data() for acceptable formats and file-naming conventions.
 """
 from fabric.api import env, settings, hide
 from fabric.contrib.files import exists
-from fabric.decorators import roles, runs_once
 import os
-from ..utils import notice, warn, abort, path, ls, do, confirm
-from . import django_sync
+from ..utils import notice, warn
+from . import sync, seed
 
 
 def _psql(cmd, user='', prefix=''):
@@ -31,7 +30,7 @@ def _user_exists():
         result = _psql('-c "SELECT rolname FROM pg_roles" %(db_name)s | grep "%(db_user)s"')    
     return not result.failed
     
-def _pipe_data(file_path):
+def pipe_data(file_path):
     """
     Pipe data from a file to the db.  Types of files:
     
@@ -79,8 +78,6 @@ def setup_env(conf):
         env.db_root_user = 'postgres'
         env.postgis_root = '/usr/share/postgresql/9.1/contrib/postgis-1.5'
         
-@roles('app', 'work')  
-@runs_once
 def setup():
     """Create the project database and user."""
     created_db = False
@@ -117,50 +114,19 @@ def setup():
             'ALTER TABLE geometry_columns OWNER TO %(db_user)s;' \
             'ALTER TABLE spatial_ref_sys OWNER TO %(db_user)s;' \
             '" %(db_name)s')
-    
-@roles('app', 'work')
-@runs_once
-def sync():
-    django_sync()
-
-@roles('app', 'work')
-@runs_once
-def seed(sample='n'):
-    """
-    Seed the database.  Set sample=y to load sample data (default = n).
-    Must be run from the app or work server to pipe data to psql.
-    """
-    d = path(env.data_path, 'db', 'postgis', 'seed')   
-    if exists(d):
-        files = ls(d)     
-        for f in files:
-            _pipe_data(f)                    
-                        
-    d = path(env.data_path, 'db', 'postgis', 'sample')
-    if do(sample) and exists(d):
-        files = ls(d)        
-        for f in files:
-            _pipe_data(f)
-    
-@roles('app', 'work')
-@runs_once
-def destroy():
-    """Remove the database and user."""   
-    warn('This will delete the %(db_name)s db and %(db_user)s user ' \
-        'for %(settings)s on %(db_host)s.')        
-    if not confirm('Continue? (y/n) ' % env):
-        abort('Cancelling')
         
+def destroy():
+    """Remove the database and user."""           
     if _user_exists():
-        notice('Dropping user %(db_user)s' % env)
+        notice('Dropping user "%(db_user)s"' % env)
         _psql('-c "DROP OWNED BY %(db_user)s;DROP USER %(db_user)s;" %(db_name)s')
     else:
-        notice('Database user %(db_user)s does not exist' % env)
+        notice('Database user "%(db_user)s" does not exist' % env)
     
     if _db_exists():
-        notice('Dropping database %(db_name)s' % env)
+        notice('Dropping database "%(db_name)s"' % env)
         env.doit('dropdb -h %(host)s -U %(db_root_user)s %(db_name)s' % env)
     else:
-        notice('Database %(db_name)s does not exist' % env)    
+        notice('Database "%(db_name)s" does not exist' % env)    
     
 
