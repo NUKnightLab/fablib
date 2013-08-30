@@ -11,7 +11,7 @@ import shutil
 from fabric.api import env, local
 from fabric.operations import prompt
 from fabric.utils import puts
-from .fos import join, makedirs
+from .fos import join, makedirs, relpath
 
 # Banner for the top of CSS and JS files
 BANNER = """
@@ -49,12 +49,12 @@ def match_files(src, regex):
     re_match = re.compile(regex)
     
     for (dirpath, dirnames, filenames) in os.walk(src):  
-        rel_dir = _relpath(src, dirpath)
+        relative_dir = relpath(src, dirpath)
         
         for f in filter(lambda x: not x.startswith('.'), filenames):
-            rel_path = join(rel_dir, f)
-            if re_match.match(rel_path):   
-                yield rel_path
+            relative_path = join(relative_dir, f)
+            if re_match.match(relative_path):   
+                yield relative_path
 
 def open_file(path, mode, encoding=''):
     """Open a file with character encoding detection"""   
@@ -93,7 +93,7 @@ def render_templates(src_path, dst_path):
 #
 # Main operations
 #           
-def banner(config, conf):
+def banner(config, param):
     """
     Place banner at top of js and css files in-place.    
     """
@@ -106,7 +106,7 @@ def banner(config, conf):
             fd.seek(0)
             fd.write(_banner_text+s)
     
-    for r in conf:
+    for r in param:
         src = join(env.project_path, r)
         puts('banner: %s' % src)
         if os.path.isdir(src):
@@ -115,17 +115,17 @@ def banner(config, conf):
         else:
             _do(src)
 
-def concat(config, conf):
+def concat(config, param):
     """
     Concatenate files
     """        
-    for r in conf:
+    for r in param:
         dst = join(env.project_path, r['dst']) 
         src = map(lambda x: join(env.project_path, x), r['src'])      
         makedirs(dst, isfile=True)
         local('cat %s > %s' % (' '.join(src), dst))
  
-def copy(config, conf):
+def copy(config, param):
     """
     Copy files
     """  
@@ -134,7 +134,7 @@ def copy(config, conf):
         makedirs(dst_path, isfile=True)
         shutil.copy2(src_path, dst_path)
         
-    for r in conf:
+    for r in param:
         src = join(env.project_path, r['src'])
         dst = join(env.project_path, r['dst'])
         puts('copy: %s >> %s' % (src, dst))
@@ -145,7 +145,7 @@ def copy(config, conf):
         else:   
             _do(src, dst)             
 
-def lessc(conf):
+def lessc(config, param):
     """
     Compile LESS
     """        
@@ -159,7 +159,7 @@ def lessc(conf):
     if not os.popen('which lessc').read().strip():
         abort('You must install the LESS compiler')
         
-    for r in conf:
+    for r in param:
         src = join(env.project_path, r['src'])
         dst = join(env.project_path, r['dst'])
         
@@ -171,14 +171,14 @@ def lessc(conf):
         else:
             _do(src, dst)             
 
-def minify(conf):
+def minify(config, param):
     """
     Minify javascript 
     """       
     def _do(src_path, dst_path, opt):
         local('uglifyjs %s --output %s %s' % (opt, dst_path, src_path))
                    
-    for r in conf:
+    for r in param:
         src = join(env.project_path, r['src'])
         dst = join(env.project_path, r['dst'])
         puts('minify: %s >> %s' % (src, dst))
@@ -195,7 +195,7 @@ def minify(conf):
             makedirs(dst, isfile=True)
             _do(src, dst, opt)
 
-def process(conf):
+def process(config, param):
     """
     Process codekit style imports
     """
@@ -236,7 +236,7 @@ def process(conf):
                 imported.append(file_path)
                 _do(f_out, file_path, imported)
               
-    for r in conf:
+    for r in param:
         src = join(env.project_path, r['src'])
         dst = join(env.project_path, r['dst'])       
         puts('process: %s >> %s' % (src, dst))
@@ -245,7 +245,7 @@ def process(conf):
         with open_file(dst, 'w', 'utf-8') as out_file:
             _do(out_file, src, [])
 
-def usemin(conf):
+def usemin(config, param):
     """
     Replaces usemin-style build blocks with a reference to a single file.    
 
@@ -291,7 +291,7 @@ def usemin(conf):
                 fd.write(new_s)
                 fd.truncate()
                       
-    for r in conf:
+    for r in param:
         src = join(env.project_path, r)  
         puts('usemin: %s' % src)
 

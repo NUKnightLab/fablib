@@ -47,19 +47,42 @@ def last_tag():
         return '.'.join(map(str, tag_list[-1]))
     return None  
 
-def prompt_tag():
-    """Prompt user for a new version tag"""
+def prompt_tag(msg, unique=False):
+    """Prompt user for a version tag.  Pass unique=True to require a new one."""
     tag_list = tags()
     puts('This project has the following tags:')
     puts(tag_list)
         
     while True:
-        version = prompt("Enter a new version number: ").strip()        
-        if not re.match(r'^[0-9]+\.[0-9]+\.[0-9]+$', version):
-            warn('Invalid version number, must be in the format:' \
-                ' major.minor.revision')
-        elif version in tag_list:
-            warn('Invalid version number, tag already exists')
+        version = prompt("%s: " % msg).strip()      
+        if unique:
+            if not re.match(r'^[0-9]+\.[0-9]+\.[0-9]+$', version):
+                warn('Invalid version number, must be in the format:' \
+                    ' major.minor.revision')
+            elif version in tag_list:
+                warn('Invalid version number, tag already exists')
+            else:
+                break   
+        elif not version in tag_list:
+            warn('You must enter an existing version')
         else:
-            break    
+            break
+         
     return version   
+
+def push_tag(version):
+    """Create and push a tag"""
+    with lcd(env.project_path):
+        local('git tag %s' % version)
+        local('git push origin %s' % version)    
+
+def delete_tag(version):
+    """Delete and push a tag"""
+    with lcd(env.project_path):
+        local('git tag -d %s' % version)
+        local('git push origin :refs/tags/%s' % version)    
+    
+    
+        
+               
+    

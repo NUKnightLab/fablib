@@ -3,6 +3,7 @@ File-related utilities
 """
 import os
 from fabric.api import env, local, run
+from fabric.context_managers import hide
 import fabric.contrib.files
 from fabric.utils import puts
 
@@ -12,16 +13,17 @@ def clean(path):
     puts('clean: %s' % path)
 
     if exists(path): 
-        if env.settings == 'loc':
-            result = local('file -b %s' % path, capture=True)
-        else:
-            result = run('file -b %s' % path)
+        with hide('commands'):
+            if env.settings == 'loc':
+                result = local('file -b %s' % path, capture=True)
+            else:
+                result = run('file -b %s' % path)
 
-        if result == 'directory':
-            for item in ls(path):
-                env.doit('rm -rf %s' % item)         
-        else:
-            env.doit('rm -rf %s' % path)
+            if result == 'directory':
+                for item in ls(path):
+                    env.doit('rm -rf %s' % item)         
+            else:
+                env.doit('rm -rf %s' % path)
                 
 def exists(path, required=False):
     """Does path exist?"""
@@ -35,10 +37,11 @@ def exists(path, required=False):
       
 def ls(d):
     """Get a directory listing."""
-    if env.settings == 'loc':
-        return [join(d, f) for f in local("ls -1 %s" % d, 
-            capture=True).splitlines()] 
-    return [join(d, f) for f in run("ls -1 %s" % d).splitlines()] 
+    with hide('commands'):
+        if env.settings == 'loc':
+            return [join(d, f) for f in local("ls -1 %s" % d, 
+                capture=True).splitlines()] 
+        return [join(d, f) for f in run("ls -1 %s" % d).splitlines()] 
 
 def join(*args):
     """Join paths."""
@@ -49,7 +52,8 @@ def makedirs(path, isfile=False):
     if isfile:
         path = os.path.dirname(path)
     if not exists(path):
-        env.doit('mkdir -p %s' % path)
+        with hide('commands'):
+            env.doit('mkdir -p %s' % path)
 
 def relpath(root_path, path):
     """
