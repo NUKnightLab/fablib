@@ -93,9 +93,10 @@ def _run_in_ve_local(command):
 def _s3cmd_sync(src_path, bucket):
     """Sync local directory with S3 bucket"""
     repo_dir = dirname(dirname(os.path.abspath(__file__)))
+    print repo_dir
     
     with lcd(repo_dir):
-        local('fabfile/bin/s3cmd --config=%s sync' \
+        local('fablib/bin/s3cmd --config=%s sync' \
                 ' --rexclude ".*/\.[^/]*$"' \
                 ' --delete-removed --acl-public' \
                 ' %s/ s3://%s/' \
@@ -332,7 +333,7 @@ else:
     @task
     def deploy():
         """Deploy to S3 bucket"""
-        if not 'deploy' in CONFIG:
+        if not 'deploy' in _config:
             abort('Could not find "deploy" in config file')
     
         # Do we need to build anything here?!?     
@@ -344,17 +345,17 @@ else:
     
         # render templates and run usemin
         static.render_templates(template_path, deploy_path)   
-        static.usemin([deploy_path])
+        static.usemin(_config, [deploy_path])
     
         # copy static files
-        static.copy([{
+        static.copy(_config, [{
             "src": join(env.project_path, 'website', 'static'),
             "dst": join(deploy_path, 'static')
         }])
     
         # additional copy?
         if 'copy' in _config['deploy']:
-            static.copy(_config['deploy']['copy'])
+            static.copy(_config, _config['deploy']['copy'])
    
         # sync to S3
         _s3cmd_sync(deploy_path, _config['deploy']['bucket'])
