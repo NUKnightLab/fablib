@@ -20,6 +20,9 @@ from . import aws, git
 env.debug = False 
 env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[]}
 
+if not 'django' in env:
+    env.django = False
+    
 # Path to s3cmd.cnf in secrets repository
 env.s3cmd_cfg = join(dirname(dirname(abspath(__file__))), 
     'secrets', 's3cmd.cfg')
@@ -244,13 +247,7 @@ else:
         if not do(prompt("Continue? (y/n): ").strip()):
             abort('Aborting.')       
         env.debug = True
-            
-    @task
-    def serve():
-        """Run the development server"""
-        with lcd(join(env.project_path)):
-            local('python website/app.py')
-     
+                 
     @task
     def build():
         """Build version"""   
@@ -359,6 +356,20 @@ else:
    
         # sync to S3
         _s3cmd_sync(deploy_path, _config['deploy']['bucket'])
+
+@task
+def serve():
+    """Run the development server"""
+    if not 'project_path' in env:
+        loc()
+        
+    with lcd(join(env.project_path)):
+        if env.django:
+            local('python manage.py runserver')
+        elif DYNAMIC:
+            local('python api.py')
+        else:    
+            local('python website/app.py')
        
 @task
 @roles('app')
