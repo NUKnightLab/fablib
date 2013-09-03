@@ -122,8 +122,8 @@ if DYNAMIC:
     def stg():
         """Work on staging environment."""
         _setup_env('stg')
-        #env.aws_storage_bucket = 'media.knilab.com/%(project_name)s' % env
-        env.aws_storage_bucket = 'test.knilab.com/%(project_name)s' % env
+        env.aws_storage_bucket = 'media.knilab.com/%(project_name)s' % env
+
     @task
     def loc():
         """Work on local environment."""
