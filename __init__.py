@@ -77,7 +77,7 @@ def _setup_env(env_type):
     
     if DYNAMIC:
         # Load db module into env.db
-        db.load_module()
+        db.load()
     else:
         env.build_path = join(env.project_path, 'build')
         env.source_path = join(env.project_path, 'source')           

@@ -3,9 +3,10 @@ Utility functions
 """
 from fabric.api import env, run
 from fabric.colors import red, blue
-from fabric.contrib.files import exists
 from fabric.context_managers import prefix
+from fabric.contrib.files import exists
 from fabric.decorators import task
+from fabric.operations import prompt
 import fabric.utils
 import sys
 import os
@@ -29,7 +30,7 @@ def abort(msg):
 
 def do(yes_no):
     """Boolean for yes/no values."""
-    return yes_no.lower().startswith('y')
+    return yes_no.strip().lower().startswith('y')
 
 def confirm(msg):
     """Get confirmation from the user."""

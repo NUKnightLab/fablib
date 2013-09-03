@@ -1,117 +1,146 @@
 """
 mysql
-
-seed data:
-    <project>/data/db/mysql/seed/
-    
-sample data:
-    <project>/data/db/mysql/sample/
-    
-See pipe_data() for acceptable formats and file-naming conventions.
 """
-from fabric.api import env, settings, hide
-from fabric.contrib.files import exists
 import os
+from fabric.api import env, settings, hide
 from ..utils import abort, notice, warn
-from . import sync, seed
+from . import BaseDatabase
 
 
-def _mysql(cmd, user= '', prefix=''):
-    if user:
-        c = ' mysql -h %(db_host)s -u '+user+' '
-        if env.db_password:
-            c += '-p"%(db_password)s" '
-    else:
-        c = ' mysql -h %(db_host)s -u '+env.db_root_user+' '
-        if env.db_root_password:
-            c += '-p"%(db_root_password)s" '
-    return env.doit((prefix+c+cmd) % env)
+class Database(BaseDatabase):
+    def __init__(self, conf):
+        super(Database, self).__init__(conf)    
 
-def _db_exists():
-    with hide('warnings'), settings(warn_only=True):
-        result = _mysql('-e "SHOW DATABASES;" | grep "^%(db_name)s$"')
-    return not result.failed
-
-def _user_exists():
-    with hide('warnings'), settings(warn_only=True):
-        result = _mysql('-e "SELECT User FROM mysql.user;" | grep "^%(db_user)s$"')
-    return not result.failed
-       
-def pipe_data(file_path):
-    """
-    Pipe data from a file to the db.  Valid types of files:
-    
-    1.  Files created using mysqldump (full SQL statements)
-
-    These are loaded by piping their contents directly to mysql.
-    
-        any_name_is_fine.sql[.gz|.gzip|.zip|.Z]   
-
-    Files that do not follow these naming conventions are skipped.
-    """    
-    (other, ext) = os.path.splitext(file_path)
-    ext = ext.lower()
-    if ext.lower() in ('.gz', '.gzip', '.zip', '.Z'):
-        cmd = 'gunzip -c'
-        (other, ext) = os.path.splitext(other) 
-        ext = ext.lower()  
-    else:
-        cmd = 'cat'
-    
-    if ext == '.sql':
-        _mysql('%(db_name)s', 
-            user=env.db_user, prefix='%s %s |' % (cmd, file_path))
-    else:
-        warn('Skipping file, unknown format (%s)' % file_path)      
-
-def setup_env(conf):
-    """Setup the working environment as appropriate for loc, stg, prd."""  
-    if env.settings == 'loc':
-        env.db_root_user = conf.get('ROOT_USER', 'root')
-        env.db_root_password = conf.get('ROOT_PASSWORD', '')
-    else:
-        env.db_root_user = conf.get('ROOT_USER', '')
-        env.db_root_password = conf.get('ROOT_PASSWORD', '')
-        
-        if not env.db_root_user:
-            abort('No "ROOT_USER" found in DATABASES settings')
-        if not env.db_root_password:
-            abort('No "ROOT_PASSWORD" found in DATABASES settings')
-           
-def setup():
-    """
-    Create the project database and user.
-    """    
-    # Create the project database
-    if _db_exists():
-        notice('Database "%(db_name)s" exists on host %(db_host)s' % env)
-    else:
-        notice('Creating db "%(db_name)s"' % env)
-        _mysql('-e "CREATE DATABASE %(db_name)s;"')
-         
-    # Create the database user
-    if _user_exists():
-        notice('Database user "%(db_user)s" exists on host %(db_host)s' % env)
-    else:
-        notice('Creating db user "%(db_user)s"' % env)
-        if env.db_password:
-            _mysql('-e "CREATE USER \'%(db_user)s\' IDENTIFIED BY \'%(db_password)s\';"')        
+        if env.settings == 'loc':
+            self.root_user = conf.get('ROOT_USER', 'root')
+            self.root_password = conf.get('ROOT_PASSWORD', '')
         else:
-            _mysql('-e "CREATE USER \'%(db_user)s\';"')
-        _mysql('-e "GRANT ALL PRIVILEGES ON %(db_name)s.* TO \'%(db_user)s\';"') 
-        _mysql('-e "FLUSH PRIVILEGES;"')       
+            self.root_user = conf.get('ROOT_USER', '')
+            self.root_password = conf.get('ROOT_PASSWORD', '')
+        
+            if not self.root_user:
+                abort('No "ROOT_USER" found in DATABASES settings')
+            if not self.root_password:
+                abort('No "ROOT_PASSWORD" found in DATABASES settings')
+
+    def cmd(self, cmd, prefix='', **kwargs): 
+        """
+        Send command to mysql.
+        """  
+        s = prefix+' mysql -h {0.host} -u {0.root_user} '
+        if self.root_password:
+            s += ' -p"{0.root_password}" '
+        s += cmd      
+        return env.doit(s.format(self) % env, **kwargs)
+        
+    def db_exists(self, name):
+        """
+        Does the database exist?
+        """
+        with hide('warnings'), settings(warn_only=True):
+            result = self.cmd('-e "SHOW DATABASES;" | grep "^%s$"' % name)
+        return not result.failed
+            
+    def user_exists(self):
+        """
+        Does the user exist?
+        """
+        with hide('warnings'), settings(warn_only=True):
+            result = self.cmd('-e ' \
+                '"SELECT User FROM mysql.user;" | grep "^{0.user}$"')
+        return not result.failed
+       
+    def pipe_data(self, file_path):
+        """
+        Pipe data from a file to the db.  Valid types of files:
     
-def destroy():
-    """Remove the database and user."""   
-    if _user_exists():
-        notice('Dropping user "%(db_user)s"' % env)
-        _mysql('-e "DROP USER \'%(db_user)s\';"')
-    else:
-        notice('Database user "%(db_user)s" does not exist' % env)        
+        1.  Files created using mysqldump (full SQL statements)
+            These are loaded by piping their contents directly to mysql.
     
-    if _db_exists():
-        notice('Dropping database "%(db_name)s"' % env)
-        _mysql('-e "DROP DATABASE %(db_name)s;"')
-    else:
-        notice('Database "%(db_name)s" does not exist' % env)    
+                any_name_is_fine.sql[.gz|.gzip|.zip|.Z]   
+
+        Files that do not follow these naming conventions are skipped.
+        """    
+        (other, ext) = os.path.splitext(file_path)
+        ext = ext.lower()
+        if ext.lower() in ('.gz', '.gzip', '.zip', '.Z'):
+            cmd = 'gunzip -c'
+            (other, ext) = os.path.splitext(other) 
+            ext = ext.lower()  
+        else:
+            cmd = 'cat'
+    
+        if ext == '.sql':
+            self.cmd('{0.name}', prefix='%s %s |' % (cmd, file_path))
+        else:            
+            warn('Skipping file, unknown format (%s)' % file_path)      
+
+    def dump_data(self, file_path):
+        """
+        Dump data from database to file.
+        """    
+        with hide('commands'):
+            if env.settings == 'loc':
+                result = self.cmd('-e "SHOW TABLES;" {0.name}', capture=True)
+            else:
+                result = self.cmd('-e "SHOW TABLES;" {0.name}')
+
+        c = 'mysqldump -h {0.host} -u {0.user}'
+        if env.password:
+            c += ' -p"{0.password}" '        
+       
+        # Ignore django administrative tables     
+        for line in result.splitlines():
+            if line.startswith('+'):
+                continue
+            name = line.strip('| ') 
+           
+            if name.startswith('Tables_in_'):
+                continue
+            if name.startswith('auth_') or name.startswith('django_'):
+                c += ' --ignore-table={0.name}.'+name
+        
+        env.doit((c+' {0.name} > '+file_path).format(self))
+           
+    def setup(self):
+        """
+        Create the project database and user.
+        """    
+        # Create the project database
+        if self.db_exists(self.name):
+            notice('Database "{0.name}" exists on host {0.host}'.format(self))
+        else:
+            notice('Creating db "{0.name}"'.format(self))
+            self.cmd('-e "CREATE DATABASE {0.name};"')
+         
+        # Create the database user
+        if self.user_exists():
+            notice('Database user "{0.user}" exists on host {0.host}'.format(self))
+        else:
+            notice('Creating db user "{0.user}"'.format(self))
+            if self.password:
+                self.cmd('-e "CREATE USER \'{0.user}\' IDENTIFIED BY \'{0.password}\';"')        
+            else:
+                self.cmd('-e "CREATE USER \'{0.user}\';"')
+            self.cmd('-e "GRANT ALL PRIVILEGES ON {0.name}.* TO \'{0.user}\';"') 
+            self.cmd('-e "FLUSH PRIVILEGES;"')       
+    
+    def destroy(self):
+        """
+        Remove the database and user.
+        """   
+        if self.user_exists():
+            notice('Dropping database user "{0.user}"'.format(self))
+            self.cmd('-e "DROP USER \'{0.user}\';"')
+        else:
+            notice('Database user "{0.user}" does not exist'.format(self))        
+    
+        if self.db_exists(self.name):
+            notice('Dropping database "{0.name}"'.format(self))
+            self.cmd('-e "DROP DATABASE {0.name};"')
+        else:
+            notice('Database "{0.name}" does not exist'.format(self))    
+        
+
+    
 
