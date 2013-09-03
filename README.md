@@ -1,4 +1,3 @@
-
 ### Setup
 
 Add the AWS pem file to your ssh agent:
@@ -43,9 +42,8 @@ Once you have created your project `fabfile.py`, you can run `fab -l` to see the
  
     project_path = dirname(abspath(__file__))
     repos_path = dirname(project_path)
-    fablib_path = join(repos_path, 'fablib')
 
-    add_paths(project_path, repos_path, fablib_path)
+    add_paths(project_path, repos_path)
 
     #
     # Import from fablib
