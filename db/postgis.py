@@ -8,8 +8,8 @@ from . import BaseDatabase
 
 class Database(BaseDatabase):
     def __init__(self, conf):
-        super(Database, self).__init__(conf)        
-
+        super(Database, self).__init__(conf)     
+        
         if env.settings == 'loc':
             self.root_user = env.local_user
             self.postgis_root = '/usr/local/share/postgis'
@@ -120,19 +120,19 @@ class Database(BaseDatabase):
                 'ALTER TABLE spatial_ref_sys OWNER TO {0.user};' \
                 '" {0.name}')      
         
-    def destroy():
+    def destroy(self):
         """
         Remove the database and user.
         """           
         if self.user_exists():
-            notice('Dropping database user "{0.user}"'.format(0))
+            notice('Dropping database user "{0.user}"'.format(self))
             self.cmd('-c "' \
                 'DROP OWNED BY {0.user};' \
                 'DROP USER {0.user};" {0.name}')
         else:
             notice('Database user "{0.user}" does not exist'.format(self))
     
-        if self.db_exists():
+        if self.db_exists(self.name):
             notice('Dropping database "{0.name}"'.format(self))
             env.doit('dropdb -h {0.host} -U {0.root_user} {0.name}'.format(self))
         else:
