@@ -118,7 +118,7 @@ def load():
        
         # Load db-specific module
         engine = conf.get('ENGINE', '')
-        m = re.match(r'.*\.(?P<db_type>[a-zA-Z0-9]+)$', engine)
+        m = re.match(r'.*?(?P<db_type>[a-zA-Z0-9]+)$', engine)
         if not m:
             raise FablibDbTypeError('no DATABASES.ENGINE match')
            
@@ -129,10 +129,10 @@ def load():
                 
         env.db = db_mod.Database(conf)
     except FablibDbTypeError, e:
-        env.db = BaseDatabase(conf)
+        env.db = BaseDatabase({})
         warn('Could not determine db type (%s)' % e)
     except ImportError, e:
-        env.db = BaseDatabase(conf)
+        env.db = BaseDatabase({})
         warn('Could not import settings module "%s": %s' % (mod_name, e))
 
 #

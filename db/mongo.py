@@ -14,8 +14,8 @@ class Database(BaseDatabase):
         """
         Send command to mongo.
         """
-        s = ' mongo -host {0.host} '
-        return env.doit((prefix+s.format(self)+cmd) % env)
+        s = prefix+' mongo -host {0.host} '+cmd
+        return env.doit((s.format(self)) % env)
 
     def db_exists(self, name):
         with hide('warnings'), settings(warn_only=True):
@@ -24,12 +24,12 @@ class Database(BaseDatabase):
                 ' | grep "\"%s\""' % name)
         return not result.failed
            
-    def destroy():
+    def destroy(self):
         """
         Remove the database and user.
         """   
         if self.db_exists(self.name):
-            notice('Dropping database "{0.name}"'.format.self))
+            notice('Dropping database "{0.name}"'.format(self))
             self.cmd('{0.name} --eval "printjson(db.dropDatabase())"')
         else:
             notice('Database "{0.name}" does not exist'.format(self))    
