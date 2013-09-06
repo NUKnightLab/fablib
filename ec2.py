@@ -1,10 +1,13 @@
 """
 Dynamic site utilities
 """
+from random import choice
 from fabric.api import env, run, local 
 from fabric.context_managers import cd
+from fabric.decorators import roles
 from . import aws
-from .fos import join
+from .fos import exists, join
+from .utils import run_in_ve
 
 def setup_ssh():
     ssh_path = join(env.home_path, '.ssh')
@@ -30,12 +33,14 @@ def setup_virtualenv():
     """Create a virtualenvironment."""
     run('virtualenv -p %(python)s %(ve_path)s' % env)
 
+@roles('app', 'work') 
 def build_django_siteconf():
     chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'
     secret_key = ''.join([choice(chars) for i in range(50)])
     run("""echo "SECRET_KEY='%s'" >> %s""" % (secret_key,
-        os.path.join(env.project_path, 'core', 'settings', 'site.py')))
+        join(env.project_path, 'core', 'settings', 'site.py')))
 
+@roles('app', 'work')
 def install_requirements():
     with cd(env.project_path):
         if exists('requirements.txt'):

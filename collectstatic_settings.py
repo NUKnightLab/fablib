@@ -5,4 +5,4 @@ from os.path import abspath, dirname, join
 
 from core.settings.loc import *
 
-STATIC_ROOT = join(dirname(abspath(__file__)), 'static')
+STATIC_ROOT = join(dirname(abspath(__file__)), '_static')

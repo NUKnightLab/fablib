@@ -18,6 +18,7 @@ from .utils import notice, warn, abort, do, confirm, run_in_ve
 from . import aws, git
    
 env.debug = False 
+env.python = 'python2.7'
 env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[]}
 
 if not 'django' in env:
@@ -30,10 +31,14 @@ if not os.path.exists(env.s3cmd_cfg):
     abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
 
 # STATIC or DYNAMIC? look for config.json
-config_json_path = join(dirname(dirname(os.path.abspath(__file__))), 
-            env.project_name, 'config.json')  
+if 'project_name' in env:
+    config_json_path = join(dirname(dirname(os.path.abspath(__file__))), 
+                env.project_name, 'config.json')  
 
-STATIC = os.path.exists(config_json_path)
+    STATIC = os.path.exists(config_json_path)
+else:
+    STATIC = False
+    
 DYNAMIC = not STATIC
 
 ############################################################
@@ -48,17 +53,22 @@ def _setup_env(env_type):
     
     if env.settings == 'loc':
         env.doit = local    # run/local
+        env.roledefs = {
+            'app': ['localhost'], 
+            'work': [], 
+            'pgis':['localhost'], 
+            'mongo': ['localhost']
+        }
         
         # base paths
-        env.home_path = join('/Users', env.local_user)
+        env.home_path = os.path.expanduser('~')
         env.env_path = os.getenv('WORKON_HOME') or \
             _abort("You must set the WORKON_HOME environment variable to the" \
                 " root directory for your virtual environments.")       
-        env.sites_path = dirname(dirname(os.path.abspath(__file__)))
-         
-        env.roledefs = {'app': ['localhost'], 'work': []}
+        env.sites_path = dirname(dirname(os.path.abspath(__file__)))         
     else:
         env.doit = run      # run/local
+        env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[]}
 
         # base paths
         env.home_path = join('/home', env.app_user)
@@ -96,8 +106,7 @@ def _run_in_ve_local(command):
 def _s3cmd_sync(src_path, bucket):
     """Sync local directory with S3 bucket"""
     repo_dir = dirname(dirname(os.path.abspath(__file__)))
-    print repo_dir
-    
+     
     with lcd(repo_dir):
         local('fablib/bin/s3cmd --config=%s sync' \
                 ' --rexclude ".*/\.[^/]*$"' \
@@ -129,7 +138,7 @@ if DYNAMIC:
         """Work on local environment."""
         _setup_env('loc')    
 
-    @task      
+    @task
     @roles('app','work')
     @require_settings(allow=['stg','prd'])                    
     def setup_project():
@@ -142,8 +151,7 @@ if DYNAMIC:
         ec2.install_requirements()
 
     @task
-    @roles('app','work')
-    @require_settings                    
+    @require_settings
     def setup(sample='n'):
         """Setup deployment."""    
         execute(setup_project)
@@ -169,10 +177,12 @@ if DYNAMIC:
             static_root = collectstatic_settings.STATIC_ROOT     
         
             if os.path.exists(static_root):
-                shutil.rmtree(static_root)        
-            _run_in_ve_local('python manage.py collectstatic ' + \
-                '--pythonpath="%s" ' \
-                '--settings=fablib.collectstatic_settings' % repo_dir)
+                shutil.rmtree(static_root)   
+                
+            _run_in_ve_local('python manage.py collectstatic' \
+                ' --pythonpath="%s"' \
+                ' --settings=fablib.collectstatic_settings' \
+                % repo_dir)
         else:
             static_root = join(repo_dir, env.project_name, 'static')
     
@@ -181,17 +191,17 @@ if DYNAMIC:
         if env.django and os.path.exists(static_root):
             shutil.rmtree(static_root)        
 
-    @task  
+    @task
     @require_settings(allow=['prd','stg'], verbose=True)
-    def deploy(mro='y', requirements='y', static='y', restart='y'):
+    def deploy(mro='y', requirements='n', static='y', restart='y', force='n'):
         """Deploy latest version of application to the server(s)."""
         if do(mro):
             execute(apache.mrostart)
-        git.checkout()
+        execute(git.checkout)
         if do(requirements):
-            execute(_install_requirements)
+            execute(ec2.install_requirements)
         if do(static):
-            execute(deploy_static)
+            execute(deploy_static, force=force)
         if do(restart):
             if do(mro):
                 execute(apache.mrostop)
@@ -205,7 +215,7 @@ if DYNAMIC:
         """Remove project environment."""
         warn('This will remove all %(project_name)s project files for' \
             ' %(settings)s on %(host)s.')
-        if not confirm('Continue? (y/n)'):
+        if not confirm('Continue? (y/n) '):
             abort('Cancelling')
 
         execute(apache.unlink_conf)
@@ -214,7 +224,7 @@ if DYNAMIC:
         run('rm -rf %(log_path)s' % env) 
         run('rm -rf %(ve_path)s' % env)
 
-    @task    
+    @task
     @require_settings
     def destroy():
         """Remove project environment and databases."""

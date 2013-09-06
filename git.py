@@ -2,6 +2,7 @@ import os
 import re
 from fabric.api import env, local, run
 from fabric.context_managers import cd, lcd
+from fabric.decorators import roles
 from fabric.operations import prompt
 from fabric.utils import puts
 from .utils import abort, warn
@@ -18,11 +19,13 @@ def check_clean(force=False):
     git_status = os.popen('git status').read()
     if not force and not git_status.startswith(_ready_status):    
         abort(_not_ready_msg)      
- 
+
+@roles('app', 'work') 
 def checkout():
     """Pull the latest code from github."""
     run('cd %(project_path)s; git pull' % env)    
 
+@roles('app', 'work') 
 def clone_repo():
     """Clone the git repository."""
     run('git clone %(repo_url)s %(project_path)s' % env)
