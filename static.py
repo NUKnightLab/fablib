@@ -8,7 +8,8 @@ import json
 import os
 import re
 import shutil
-from fabric.api import env, local
+from fabric.api import env, local, settings
+from fabric.context_managers import hide
 from fabric.operations import prompt
 from fabric.utils import puts
 from .fos import join, makedirs, relpath
@@ -101,10 +102,11 @@ def banner(config, param):
 
     def _do(file_path):
         puts('  %s' % file_path)  
-        with open(file_path, 'r+') as fd:
+        with open_file(file_path, 'r+') as fd:
             s = fd.read()
             fd.seek(0)
-            fd.write(_banner_text+s)
+            fd.write(_banner_text.encode(fd.encoding))
+            fd.write(s)
     
     for r in param:
         src = join(env.project_path, r)
@@ -212,7 +214,7 @@ def process(config, param):
         
     def _do(f_out, path, imported):
         s = ''
-        dirpath = dirname(path)      
+        dirpath = os.path.dirname(path)      
         with open_file(path, 'r') as f_in:
             s = f_in.read()
      

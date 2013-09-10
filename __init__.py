@@ -269,7 +269,11 @@ else:
         if not 'version' in _config:
             _config['version'] = git.last_tag()
         if not _config['version']:
-            abort('No available version tag')      
+            warn('No available version tag, using test value "0.0.0"')
+            if not do(prompt("Continue? (y/n): ").strip()):
+                abort('Aborting.')      
+            _config['version'] = '0.0.0'
+                  
     
         notice('Building version %(version)s...' % _config)
 
@@ -380,12 +384,7 @@ def serve():
             local('python api.py')
         else:    
             local('python website/app.py')
-       
-@task
-@roles('app')
-def test(force='n'):
-    git.prompt_tag()
-                  
+                         
 @task
 def dump():
     """Dump env to stdout"""
