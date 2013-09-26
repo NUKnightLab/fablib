@@ -6,6 +6,7 @@ import os
 from os.path import abspath, dirname
 import sys
 import shutil
+from datetime import datetime
 from fabric.api import env, put, run, local, settings, hide
 from fabric.context_managers import cd, lcd
 from fabric.tasks import execute
@@ -249,11 +250,10 @@ else:
         """Setup debug settings"""
         warn('DEBUG IS ON:')
         _config['deploy']['bucket'] = 'test.knilab.com'
-     
+
         print 'deploy.bucket:', _config['deploy']['bucket']
-        print 'version tagging is OFF'
         print ''
-    
+
         if not do(prompt("Continue? (y/n): ").strip()):
             abort('Aborting.')       
         env.debug = True
@@ -265,15 +265,12 @@ else:
         if not 'build' in _config:
             abort('Could not find "build" in config file')
       
-        # Determine version
+        # Check version
         if not 'version' in _config:
-            _config['version'] = git.last_tag()
-        if not _config['version']:
-            warn('No available version tag, using test value "0.0.0"')
+            _config['version'] = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
+            warn('Using development version value "%(version)s"' % _config)
             if not do(prompt("Continue? (y/n): ").strip()):
                 abort('Aborting.')      
-            _config['version'] = '0.0.0'
-                  
     
         notice('Building version %(version)s...' % _config)
 
@@ -286,7 +283,7 @@ else:
            
     @task
     def stage():
-        """Build version, copy to local cdn repository, tag last commit"""    
+        """Build/commit/tag/push version, copy to local cdn repository"""    
         if not 'stage' in _config:
             abort('Could not find "stage" in config file')
 
@@ -296,9 +293,19 @@ else:
         # Ask user for a new version
         _config['version'] = git.prompt_tag('Enter a new version number: ',
             unique=True) 
-                
+             
+        # Build version   
         build()
-    
+        
+        # Commit/push/tag
+        with lcd(env.project_path):
+            local('git add build')
+            local('git commit -m "Release %(version)s"' % _config)
+            local('git push')
+            
+            git.push_tag(_config['version'])
+            
+        # Copy to local CDN repository        
         cdn_path = join(env.cdn_path, _config['version'])
         clean(cdn_path)
     
@@ -306,12 +313,7 @@ else:
             static.copy(_config, [{
                 "src": r['src'],
                 "dst": cdn_path, "regex": r['regex']}])
-        
-        if env.debug:
-            warn('DEBUG: Skipping tagging')
-        else:
-            git.push_tag(_config['version'])
-                
+                        
     @task
     def stage_latest():
         """Copy version to latest within local cdn repository"""

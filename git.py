@@ -29,7 +29,7 @@ def checkout():
 def clone_repo():
     """Clone the git repository."""
     run('git clone %(repo_url)s %(project_path)s' % env)
-
+    
 def tags():
     """Get list of current tags"""
     if env.settings == 'loc':
@@ -84,8 +84,7 @@ def delete_tag(version):
     with lcd(env.project_path):
         local('git tag -d %s' % version)
         local('git push origin :refs/tags/%s' % version)    
-    
-    
+   
         
                
     

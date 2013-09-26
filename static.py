@@ -19,15 +19,14 @@ BANNER = """
 /* %(name)s - v%(version)s - %(date)s
  * Copyright (c) %(year)s %(author)s 
  */
-""".lstrip()
+""".strip()
 
 
 def load_config():
     """Read config.json and add 'date' and 'year'"""
     with open(join(env.project_path, 'config.json')) as fp:
         s = fp.read()
-        s = re.sub(r'//.*', '', s)
-        s = re.sub(r'/\*.*?\*/', '', s, flags=re.DOTALL)
+        s = re.sub(r'^\s*//.*[\r\n]*', '', s, flags=re.MULTILINE)
         config = json.loads(s, object_pairs_hook=collections.OrderedDict)
 
     today = date.today()
@@ -98,24 +97,31 @@ def banner(config, param):
     """
     Place banner at top of js and css files in-place.    
     """
-    _banner_text = BANNER % config
+    #_banner_text = BANNER % config
 
-    def _do(file_path):
-        puts('  %s' % file_path)  
+    def _do(file_path, banner_text):
+        puts('banner:  %s' % file_path)  
         with open_file(file_path, 'r+') as fd:
             s = fd.read()
             fd.seek(0)
-            fd.write(_banner_text.encode(fd.encoding))
+            fd.write(banner_text.encode(fd.encoding))
             fd.write(s)
-    
+        
     for r in param:
-        src = join(env.project_path, r)
-        puts('banner: %s' % src)
-        if os.path.isdir(src):
-            for f in match_files(src, '.*\.(css|js)$'):
-                _do(join(src, f))
+        src = join(env.project_path, r['src'])
+                
+        if 'template' in r:
+            template = '\n'.join(r['template'])
         else:
-            _do(src)
+            template = BANNER        
+        banner_text = (template+'\n') % config
+            
+        if os.path.isdir(src):
+            regex = r['regex'] if 'regex' in r else '.*'
+            for f in match_files(src, regex):
+                _do(join(src, f), banner_text)
+        else:
+            _do(src, banner_text)
 
 def concat(config, param):
     """
