@@ -92,7 +92,7 @@ class Database(BaseDatabase):
             notice('Template database template_postgis already exists')
         else:
             notice('Creating template database template_postgis')
-            env.doit('createdb -h %{0.host} -U {0.root_user} template_postgis'.format(self))
+            env.doit('createdb -h {0.host} -U {0.root_user} template_postgis'.format(self))
             self.cmd('-f {0.postgis_root}/postgis.sql template_postgis')
             self.cmd('-f {0.postgis_root}/spatial_ref_sys.sql template_postgis')
        
