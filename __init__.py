@@ -300,7 +300,13 @@ else:
         # Commit/push/tag
         with lcd(env.project_path):
             local('git add build')
-            local('git commit -m "Release %(version)s"' % _config)
+            with settings(warn_only=True): # support builds where there's no change; sometimes comes up when reusing a tag because of an unexpected problem
+                msg = local('git commit -m "Release %(version)s"' % _config,capture=True)
+                if 'nothing to commit' in msg:
+                    warn(msg)
+                    warn('continuing anyway')
+                elif not msg.startswith('[master'):
+                    abort("Unexpected result: %s" % msg)
             local('git push')
             
             git.push_tag(_config['version'])
