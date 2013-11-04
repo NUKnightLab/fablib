@@ -6,6 +6,7 @@ from fabric.api import env, local, run
 from fabric.context_managers import hide
 import fabric.contrib.files
 from fabric.utils import puts
+from .utils import abort
 
 def clean(path):
     """Delete contents of path"""
