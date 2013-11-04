@@ -13,6 +13,7 @@ from fabric.context_managers import hide
 from fabric.operations import prompt
 from fabric.utils import puts
 from .fos import join, makedirs, relpath
+from .utils import abort
 
 # Banner for the top of CSS and JS files
 BANNER = """

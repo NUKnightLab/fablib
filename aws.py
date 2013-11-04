@@ -8,7 +8,7 @@ import tempfile
 import boto
 from fabric.api import env, put
 from .decorators import require_settings
-
+from .utils import abort
 
 AWS_CREDENTIALS_ERR_MSG = """
     Unable to connect to AWS. Check your credentials. boto attempts to
