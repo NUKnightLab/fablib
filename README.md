@@ -1,3 +1,13 @@
+FabLib is a suite of tools created to help with KnightLab software development and deployment. After we made it, we realized that there is already something on [pypi with the same name](https://pypi.python.org/pypi/fablib), but we didn't really create it for general use anyway.
+
+We're making the repository public mostly so that people who want to work on our javascript code can use it to build the javascript and CSS files the same way that we do.
+
+### Installing
+
+KnightLab projects are written to assume that this directory is "alongside" directories (checked out git repositories) that use it. Gradually, we'll probably switch to using PIP SSH urls to make it available as an install, but for now, you may need to clone it accordingly.
+
+If you're just using this because it's needed by StoryMapJS or another javascript project, you don't need to read further.
+
 ### Setup
 
 Add the AWS pem file to your ssh agent:
