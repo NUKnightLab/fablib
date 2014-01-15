@@ -13,7 +13,7 @@ from fabric.tasks import execute
 from fabric.decorators import roles, runs_once, task
 from fabric.operations import prompt
 from fabric.utils import puts
-from .decorators import require_settings
+from .decorators import require_settings, require_static_settings
 from .fos import clean, exists, join
 from .utils import notice, warn, abort, do, confirm, run_in_ve
 from . import aws, git
@@ -348,15 +348,35 @@ else:
         if not version:
             abort('No available version tag')     
         git.delete_tag(version)
-                 
+
+
     @task
+    def prd():
+        """Work on production environment."""
+        env.static_settings = 'prd'
+
+    
+    @task
+    def stg():
+        """Work on staging environment."""
+        env.static_settings = 'stg'
+ 
+    @task
+    @require_static_settings(allow=['prd','stg'], verbose=True)
     def deploy():
-        """Deploy to S3 bucket"""
+        """Deploy to S3 bucket.  Specify environment using prd or stg tasks."""        
         if not 'deploy' in _config:
             abort('Could not find "deploy" in config file')
     
-        # Do we need to build anything here?!?     
-    
+        if not env.static_settings in _config['deploy']:
+            abort('Could not find "%(settings)s" in "deploy" in config file' % env)
+            
+        if not "bucket" in _config['deploy'][env.static_settings]:
+            abort('Could not find "bucket" in deploy.%(settings)s" in config file' % env)
+            
+        bucket = _config['deploy'][env.static_settings]['bucket']
+        notice('deploying to %s' % bucket)
+           
         template_path = join(env.project_path, 'website', 'templates')
         deploy_path = join(env.project_path, 'build', 'website')
     
@@ -377,7 +397,7 @@ else:
             static.copy(_config, _config['deploy']['copy'])
    
         # sync to S3
-        _s3cmd_sync(deploy_path, _config['deploy']['bucket'])
+        _s3cmd_sync(deploy_path, bucket)
 
 @task
 def serve():
