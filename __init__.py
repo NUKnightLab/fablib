@@ -400,7 +400,7 @@ else:
         _s3cmd_sync(deploy_path, bucket)
 
 @task
-def serve():
+def serve(ssl='n'):
     """Run the development server"""
     if not 'project_path' in env:
         loc()
@@ -411,7 +411,11 @@ def serve():
         elif DYNAMIC:
             local('python api.py')
         else:    
-            local('python website/app.py')
+            if do(ssl):
+                local('python website/app.py -s')
+            else:
+                local('python website/app.py')
+                
                          
 @task
 def dump():
