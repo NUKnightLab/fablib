@@ -20,7 +20,7 @@ from . import aws, git
    
 env.debug = False 
 env.python = 'python2.7'
-env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[]}
+env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[], 'search':[]}
 
 if not 'django' in env:
     env.django = False
@@ -58,7 +58,8 @@ def _setup_env(env_type):
             'app': ['localhost'], 
             'work': [], 
             'pgis':['localhost'], 
-            'mongo': ['localhost']
+            'mongo': ['localhost'],
+            'search': [], 
         }
         
         # base paths
@@ -69,7 +70,7 @@ def _setup_env(env_type):
         env.sites_path = dirname(dirname(os.path.abspath(__file__)))         
     else:
         env.doit = run      # run/local
-        env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[]}
+        env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[], 'search':[] }
 
         # base paths
         env.home_path = join('/home', env.app_user)
