@@ -375,8 +375,14 @@ else:
             abort('Could not find "bucket" in deploy.%(settings)s" in config file' % env)
             
         bucket = _config['deploy'][env.static_settings]['bucket']
+ 
         notice('deploying to %s' % bucket)
-           
+       
+        if 'usemin_context' in _config['deploy'][env.static_settings]:
+            usemin_context = _config['deploy'][env.static_settings]['usemin_context']
+        else:
+            usemin_context = None
+            
         template_path = join(env.project_path, 'website', 'templates')
         deploy_path = join(env.project_path, 'build', 'website')
     
@@ -384,7 +390,7 @@ else:
     
         # render templates and run usemin
         static.render_templates(template_path, deploy_path)   
-        static.usemin(_config, [deploy_path])
+        static.usemin(_config, [deploy_path], usemin_context)
     
         # copy static files
         static.copy(_config, [{

@@ -254,7 +254,7 @@ def process(config, param):
         with open_file(dst, 'w', 'utf-8') as out_file:
             _do(out_file, src, [])
 
-def usemin(config, param):
+def usemin(config, param, context=None):
     """
     Replaces usemin-style build blocks with a reference to a single file.    
 
@@ -270,6 +270,8 @@ def usemin(config, param):
     
     Any leading backslashes will be stripped, but the path will otherwise
     by used as it appears within the opening build tag.
+    
+    If context, treat as a string format for context.
     """
     _re_build = re.compile(r"""
         <!--\s*build:(?P<type>\css|js)\s+(?P<dest>\S+)\s*-->
@@ -280,8 +282,8 @@ def usemin(config, param):
 
     def _sub(m):
         type = m.group('type')
-        dest = m.group('dest').strip('\\')
-    
+        dest = m.group('dest').strip('\\') % (context or {})
+          
         if type == 'css':
             return '<link rel="stylesheet" href="%s">' % dest
         elif type == 'js':
