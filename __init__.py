@@ -320,7 +320,32 @@ else:
             static.copy(_config, [{
                 "src": r['src'],
                 "dst": cdn_path, "regex": r['regex']}])
-                        
+ 
+    @task
+    def stage_dev():
+        """
+        Build and copy to local cdn repository as 'dev' version
+        
+        No tagging/committing/etc/
+        """    
+        if not 'stage' in _config:
+            abort('Could not find "stage" in config file')
+
+        # Make sure cdn exists
+        exists(dirname(env.cdn_path), required=True)
+                 
+        # Build version   
+        build()
+                    
+        # Copy to local CDN repository        
+        cdn_path = join(env.cdn_path, 'dev')
+        clean(cdn_path)
+    
+        for r in _config['stage']:
+            static.copy(_config, [{
+                "src": r['src'],
+                "dst": cdn_path, "regex": r['regex']}])
+                       
     @task
     def stage_latest():
         """Copy version to latest within local cdn repository"""
