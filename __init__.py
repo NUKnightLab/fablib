@@ -29,7 +29,7 @@ if not 'django' in env:
 env.s3cmd_cfg = join(dirname(dirname(abspath(__file__))), 
     'secrets', 's3cmd.cfg')
 if not os.path.exists(env.s3cmd_cfg):
-    abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
+    warn("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.  You will not be able to deploy.")
 
 # STATIC or DYNAMIC? look for config.json
 if 'project_name' in env:
@@ -391,6 +391,9 @@ else:
     @require_static_settings(allow=['prd','stg'], verbose=True)
     def deploy():
         """Deploy to S3 bucket.  Specify environment using prd or stg tasks."""        
+        if not os.path.exists(env.s3cmd_cfg):
+            abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
+                
         if not 'deploy' in _config:
             abort('Could not find "deploy" in config file')
     
