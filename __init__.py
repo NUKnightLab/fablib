@@ -435,23 +435,29 @@ else:
         _s3cmd_sync(deploy_path, bucket)
 
 @task
-def serve(ssl='n'):
+def serve(ssl='n', port='5000'):
     """Run the development server"""
     if not 'project_path' in env:
         loc()
+
+    opts = ' -p '+port
+    if do(ssl):
+        opts += ' -s'    
         
     with lcd(join(env.project_path)):
         if env.django:
             local('python manage.py runserver')
         elif DYNAMIC:
-            local('python api.py')
-        else:    
-            if do(ssl):
-                local('python website/app.py -s')
+            if int(port) < 1024:
+                local('sudo python api.py'+opts)
             else:
-                local('python website/app.py')
-                
-                         
+                local('python api.py'+opts)                
+        else:    
+            if int(port) < 1024:
+                local('sudo python website/app.py'+opts)     
+            else:
+                local('python website/app.py'+opts)
+                                        
 @task
 def dump():
     """Dump env to stdout"""
