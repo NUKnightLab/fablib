@@ -8,7 +8,7 @@ from fabric.utils import puts
 from .utils import abort, warn
 
 
-_ready_status = '# On branch master\nnothing to commit'
+_re_ready_status = r'(.*)On branch master\n(nothing to commit|Your branch is up-to-date)'
 
 _not_ready_msg = '' \
     'You have uncommitted local code changes. ' \
@@ -17,7 +17,7 @@ _not_ready_msg = '' \
  
 def check_clean(force=False):   
     git_status = os.popen('git status').read()
-    if not force and not git_status.startswith(_ready_status):    
+    if not force and not re.match(_re_ready_status, git_status):  
         abort(_not_ready_msg)      
 
 @roles('app', 'work') 
