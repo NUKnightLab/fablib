@@ -21,6 +21,7 @@ from . import aws, git
 env.debug = False 
 env.python = 'python2.7'
 env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[], 'search':[]}
+env.branch = 'master'       # DEFAULT BRANCH
 
 if not 'django' in env:
     env.django = False
@@ -116,6 +117,11 @@ def _s3cmd_sync(src_path, bucket):
                 ' %s/ s3://%s/' \
                 % (env.s3cmd_cfg, src_path, bucket))
   
+def _confirm_branch():
+    if env.branch != 'master':
+        if not do(prompt("You are deploying branch '%(branch)s'.  Continue? (y/n): " % env).strip()):
+            abort('Aborting.')
+  
 ############################################################
 # Dynamic sites
 ############################################################
@@ -197,6 +203,8 @@ if DYNAMIC:
     @require_settings(allow=['prd','stg'], verbose=True)
     def deploy(mro='y', requirements='n', static='y', restart='y', force='n'):
         """Deploy latest version of application to the server(s)."""
+        _confirm_branch()
+                
         if do(mro):
             execute(apache.mrostart)
         execute(git.checkout)
@@ -434,6 +442,11 @@ else:
         # sync to S3
         _s3cmd_sync(deploy_path, bucket)
 
+@task
+def branch(name):
+    """Specify a branch other than master"""
+    env.branch = name
+    
 @task
 def serve(ssl='n', port='5000'):
     """Run the development server"""

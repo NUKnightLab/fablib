@@ -1,6 +1,6 @@
 import os
 import re
-from fabric.api import env, local, run
+from fabric.api import env, local, run, settings
 from fabric.context_managers import cd, lcd
 from fabric.decorators import roles
 from fabric.operations import prompt
@@ -8,7 +8,7 @@ from fabric.utils import puts
 from .utils import abort, warn
 
 
-_re_ready_status = r'(.*)On branch master\n(nothing to commit|Your branch is up-to-date)'
+_re_ready_status = r'(.*)\n(nothing to commit|Your branch is up-to-date)'
 
 _not_ready_msg = '' \
     'You have uncommitted local code changes. ' \
@@ -23,8 +23,12 @@ def check_clean(force=False):
 @roles('app', 'work') 
 def checkout():
     """Pull the latest code from github."""
-    run('cd %(project_path)s; git pull' % env)    
-
+    with cd(env.project_path):
+        with settings(warn_only=True):
+            run('git checkout -b %(branch)s origin/%(branch)s' % env)
+        run('git checkout %(branch)s;' % env)
+        run('git pull origin %(branch)s' % env)
+    
 @roles('app', 'work') 
 def clone_repo():
     """Clone the git repository."""
