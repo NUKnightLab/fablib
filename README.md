@@ -14,7 +14,7 @@ Add the AWS pem file to your ssh agent:
 
     ssh-add <pemfile>
 
-Set your AWS credentials in environment variables `AWS_ACCESS_SECRET_KEY` and `AWS_SECRET_ACCESS_KEY`, or in one of these boto config files (do not quote key strings in these files):
+Set your AWS credentials in environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, or in one of these boto config files (do not quote key strings in these files):
 
     /etc/boto.cfg
     ~/.boto
