@@ -158,10 +158,10 @@ def lessc(config, param):
     """
     Compile LESS
     """        
-    def _do(src_path, dst_path):
+    def _do(src_path, dst_path, opt):
         makedirs(dst_path, isfile=True)
         with hide('warnings'), settings(warn_only=True):
-            result = local('lessc -x %s %s' % (src_path, dst_path))
+            result = local('lessc -x %s %s %s' % (opt, src_path, dst_path))
         if result.failed:
             abort('Error running lessc on %s' % src_path)    
 
@@ -172,20 +172,22 @@ def lessc(config, param):
         src = join(env.project_path, r['src'])
         dst = join(env.project_path, r['dst'])
         
+        opt = r['opt'] if ('opt' in r) else ''
+        
         if os.path.isdir(src):
             regex = r['regex'] if 'regex' in r else '.*'           
             for f in match_files(src, regex):
                 (base, ext) = os.path.splitext(join(dst, f)) 
-                _do(join(src, f), base+".css")
+                _do(join(src, f), base+".css", opt)
         else:
-            _do(src, dst)             
+            _do(src, dst, opt)             
 
 def minify(config, param):
     """
     Minify javascript 
     """       
     def _do(src_path, dst_path, opt):
-        local('uglifyjs %s --output %s %s' % (opt, dst_path, src_path))
+        local('uglifyjs %s --output %s %s' % (src_path, dst_path, opt))
                    
     for r in param:
         src = join(env.project_path, r['src'])
