@@ -14,11 +14,11 @@ If you're just using this because it's needed by StoryMapJS or another javascrip
  
  [LESS](http://lesscss.org)
  
-    # npm install -g less
+    # npm install less -g
   
- [UglifyJS](https://github.com/mishoo/UglifyJS)
+ [UglifyJS](https://github.com/mishoo/UglifyJS2)
  
-    # npm install -g uglify-js@1
+    # npm install uglify-js -g 
 
 
 ### Setup
