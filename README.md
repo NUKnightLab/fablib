@@ -8,13 +8,26 @@ KnightLab projects are written to assume that this directory is "alongside" dire
 
 If you're just using this because it's needed by StoryMapJS or another javascript project, you don't need to read further.
 
+### Requirements
+
+ [Node.js](http://nodejs.org)
+ 
+ [LESS](http://lesscss.org)
+ 
+    # npm install -g less
+  
+ [UglifyJS](https://github.com/mishoo/UglifyJS)
+ 
+    # npm install -g uglify-js@1
+
+
 ### Setup
 
 Add the AWS pem file to your ssh agent:
 
     ssh-add <pemfile>
 
-Set your AWS credentials in environment variables `AWS_ACCESS_SECRET_KEY` and `AWS_SECRET_ACCESS_KEY`, or in one of these boto config files (do not quote key strings in these files):
+Set your AWS credentials in environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, or in one of these boto config files (do not quote key strings in these files):
 
     /etc/boto.cfg
     ~/.boto
