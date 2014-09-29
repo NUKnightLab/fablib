@@ -398,6 +398,9 @@ else:
     @task
     @require_static_settings(allow=['prd','stg'], verbose=True)
     def deploy():
+        # Activate local virtual environment (for render_templates+flask?)
+        local('. %s' % env.activate_path)        
+
         """Deploy to S3 bucket.  Specify environment using prd or stg tasks."""        
         if not os.path.exists(env.s3cmd_cfg):
             abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
