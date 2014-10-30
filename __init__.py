@@ -65,10 +65,12 @@ def _setup_env(env_type):
         
         # base paths
         env.home_path = os.path.expanduser('~')
-        env.env_path = os.getenv('WORKON_HOME') or \
-            abort("You must set the WORKON_HOME environment variable to the" \
-                " root directory for your virtual environments.")       
-        env.sites_path = dirname(dirname(os.path.abspath(__file__)))         
+        env.env_path = os.getenv('WORKON_HOME')
+        env.sites_path = dirname(dirname(os.path.abspath(__file__)))
+        if not env.env_path:
+            warn("You should set the WORKON_HOME environment variable to the" \
+                " root directory for your virtual environments.")
+            env.env_path = env.sites_path
     else:
         env.doit = run      # run/local
         env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[], 'search':[] }
