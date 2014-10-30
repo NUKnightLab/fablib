@@ -66,7 +66,7 @@ def _setup_env(env_type):
         # base paths
         env.home_path = os.path.expanduser('~')
         env.env_path = os.getenv('WORKON_HOME') or \
-            _abort("You must set the WORKON_HOME environment variable to the" \
+            abort("You must set the WORKON_HOME environment variable to the" \
                 " root directory for your virtual environments.")       
         env.sites_path = dirname(dirname(os.path.abspath(__file__)))         
     else:
