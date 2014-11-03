@@ -65,8 +65,9 @@ Once you have created your project `fabfile.py`, you can run `fab -l` to see the
  
     project_path = dirname(abspath(__file__))
     repos_path = dirname(project_path)
+    website_path = join(project_path, 'website') # static websites only
 
-    add_paths(project_path, repos_path)
+    add_paths(project_path, repos_path, website_path)
 
     #
     # Import from fablib
