@@ -58,13 +58,13 @@ class BaseDatabase(object):
         """
         Dump data from database to file_path
         """  
-        warn('%s.dump_data not implemeneted' % self.type)  
+        warn('%s.dump_data not implemented' % self.type)  
         
     def setup(self):
         """
         Create the project database and user.
         """
-        warn('%s.setup not implemeneted' % self.type)  
+        warn('%s.setup not implemented' % self.type)  
        
     def sync(self):
         """
@@ -96,7 +96,7 @@ class BaseDatabase(object):
         """
         Destroy the project database and user.
         """
-        warn('%s.destroy not implemeneted' % self.type) 
+        warn('%s.destroy not implemented' % self.type) 
 
 
 class FablibDbTypeError(Exception):
