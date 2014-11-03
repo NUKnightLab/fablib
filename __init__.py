@@ -16,40 +16,50 @@ from fabric.utils import puts
 from .decorators import require_settings, require_static_settings
 from .fos import clean, exists, join
 from .utils import notice, warn, abort, do, confirm, run_in_ve
-from . import aws, git
+from . import aws, git, static
+
    
 env.debug = False 
 env.python = 'python2.7'
 env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[], 'search':[]}
+env.app_user = 'apps'
 env.branch = 'master'       # DEFAULT BRANCH
 
 if not 'django' in env:
     env.django = False
     
-# Path to s3cmd.cnf in secrets repository
+#
+# Set path to s3cmd.cnf in secrets repository?
+#
 env.s3cmd_cfg = join(dirname(dirname(abspath(__file__))), 
     'secrets', 's3cmd.cfg')
 if not os.path.exists(env.s3cmd_cfg):
-    warn("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.  You will not be able to deploy.")
+    warn("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'." \
+         "  You will not be able to deploy.")
+#
+# Load config.json from project directory?
+#
+_config = None
+DYNAMIC = True  # dynamic or static website?
 
-# STATIC or DYNAMIC? look for config.json
-if 'project_name' in env:
+if not 'project_name' in env:
+    abort('You must set env.project_name in your fabfile')
+try:
     config_json_path = join(dirname(dirname(os.path.abspath(__file__))), 
-                env.project_name, 'config.json')  
-
-    STATIC = os.path.exists(config_json_path)
-else:
-    STATIC = False
+            env.project_name, 'config.json')  
+    _config = static.load_config(config_json_path)
+    notice('Loaded config @ %s' % config_json_path)
+        
+    DYNAMIC = 'deploy' not in _config
+except IOError:
+    notice('No config @ %s' % config_json_path)
     
-DYNAMIC = not STATIC
-
 ############################################################
 # Environment
 ############################################################
 
 def _setup_env(env_type):
     """Setup the working environment as appropriate for loc, stg, prd."""
-    env.app_user = 'apps'
     env.repo_url = 'git@github.com:NUKnightLab/%(project_name)s.git' % env
     env.settings = env_type
     
@@ -73,7 +83,13 @@ def _setup_env(env_type):
             env.env_path = env.sites_path
     else:
         env.doit = run      # run/local
-        env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[], 'search':[] }
+        env.roledefs = {
+            'app': [], 
+            'work': [], 
+            'pgis': [], 
+            'mongo': [], 
+            'search': []
+        }
 
         # base paths
         env.home_path = join('/home', env.app_user)
@@ -93,9 +109,6 @@ def _setup_env(env_type):
     if DYNAMIC:
         # Load db module into env.db
         db.load()
-    else:
-        env.build_path = join(env.project_path, 'build')
-        env.source_path = join(env.project_path, 'source')           
 
 
 def _run_in_ve_local(command):
@@ -108,6 +121,7 @@ def _run_in_ve_local(command):
     run_in_ve(command)
     globals()[cur_settings]()  
 
+
 def _s3cmd_sync(src_path, bucket):
     """Sync local directory with S3 bucket"""
     repo_dir = dirname(dirname(os.path.abspath(__file__)))
@@ -119,15 +133,17 @@ def _s3cmd_sync(src_path, bucket):
                 ' %s/ s3://%s/' \
                 % (env.s3cmd_cfg, src_path, bucket))
   
+  
 def _confirm_branch():
     if env.branch != 'master':
         if not do(prompt("You are deploying branch '%(branch)s'.  Continue? (y/n): " % env).strip()):
             abort('Aborting.')
   
+
 ############################################################
-# Dynamic sites
+# Dynamic web sites deployed to ec2
 ############################################################
-if DYNAMIC:
+if 'deploy' not in _config:
     from . import apache, db, ec2
     from . import collectstatic_settings
 
@@ -244,21 +260,70 @@ if DYNAMIC:
         execute(db.destroy)
         
 ############################################################
-# Static sites
+# Static websites deployed to S3
 ############################################################
 else:
-    from . import static
+    @task
+    def deploy(env_type):
+        """Deploy website to S3 bucket.  Specify stg|prd as argument."""            
+        _setup_env('loc') 
         
-    _setup_env('loc')      
-    _config = static.load_config()
+        # Activate local virtual environment (for render_templates+flask?)
+        local('. %s' % env.activate_path)        
 
-    # Path to cdn deployment
-    env.cdn_path = abspath(join(env.sites_path, 'cdn.knightlab.com', 
+        if not os.path.exists(env.s3cmd_cfg):
+            abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
+                
+        if not env_type in _config['deploy']:
+            abort('Could not find "%s" in "deploy" in config file' % env_type)
+        
+        if not "bucket" in _config['deploy'][env_type]:
+            abort('Could not find "bucket" in deploy.%s" in config file' % env_type)
+        
+        bucket = _config['deploy'][env_type]['bucket']
+
+        notice('deploying to %s' % bucket)
+   
+        if 'usemin_context' in _config['deploy'][env_type]:
+            usemin_context = _config['deploy'][env_type]['usemin_context']
+        else:
+            usemin_context = None
+        
+        template_path = join(_config['project_path'], 'website', 'templates')
+        deploy_path = join(_config['project_path'], 'build', 'website')
+
+        clean(deploy_path)
+
+        # render templates and run usemin
+        static.render_templates(template_path, deploy_path)   
+        static.usemin(_config, [deploy_path], usemin_context)
+
+        # copy static files
+        static.copy(_config, [{
+            "src": join(_config['project_path'], 'website', 'static'),
+            "dst": join(deploy_path, 'static')
+        }])
+
+        # additional copy?
+        if 'copy' in _config['deploy']:
+            static.copy(_config, _config['deploy']['copy'])
+
+        # sync to S3
+        _s3cmd_sync(deploy_path, bucket)
+ 
+
+############################################################
+# JS libraries
+############################################################
+
+if _config:
+    # Set env.cdn_path = path to cdn repository   
+    env.cdn_path = abspath(join(_config['root_path'], 'cdn.knightlab.com',
         'app', 'libs', _config['name']))
-    
+             
     @task
     def debug():
-        """Setup debug settings"""
+        """Setup debug settings to test deployment"""
         warn('DEBUG IS ON:')
         _config['deploy']['bucket'] = 'test.knilab.com'
 
@@ -268,10 +333,12 @@ else:
         if not do(prompt("Continue? (y/n): ").strip()):
             abort('Aborting.')       
         env.debug = True
-                 
+
     @task
-    def build():
+    def build():       
         """Build version"""   
+        _setup_env('loc')
+
         # Get build config
         if not 'build' in _config:
             abort('Could not find "build" in config file')
@@ -286,15 +353,17 @@ else:
         notice('Building version %(version)s...' % _config)
 
         # Clean build directory
-        clean(env.build_path)
+        clean(_config['build_path'])
         
         for key, param in _config['build'].iteritems():
             getattr(static, key)(_config, param)
             #getattr(sys.modules[__name__], 'fablib.static.%s' % key)(_config, param)
-           
+
     @task
     def stage():
         """Build/commit/tag/push version, copy to local cdn repository"""    
+        _setup_env('loc')
+
         if not 'stage' in _config:
             abort('Could not find "stage" in config file')
 
@@ -311,7 +380,9 @@ else:
         # Commit/push/tag
         with lcd(env.project_path):
             local('git add build')
-            with settings(warn_only=True): # support builds where there's no change; sometimes comes up when reusing a tag because of an unexpected problem
+            # support builds where there's no change; sometimes comes up when 
+            # reusing a tag because of an unexpected problem
+            with settings(warn_only=True):
                 msg = local('git commit -m "Release %(version)s"' % _config,capture=True)
                 if 'nothing to commit' in msg:
                     warn(msg)
@@ -330,14 +401,15 @@ else:
             static.copy(_config, [{
                 "src": r['src'],
                 "dst": cdn_path, "regex": r['regex']}])
- 
+
     @task
     def stage_dev():
         """
-        Build and copy to local cdn repository as 'dev' version
-        
+        Build and copy to local cdn repository as 'dev' version       
         No tagging/committing/etc/
         """    
+        _setup_env('loc')
+        
         if not 'stage' in _config:
             abort('Could not find "stage" in config file')
 
@@ -355,10 +427,12 @@ else:
             static.copy(_config, [{
                 "src": r['src'],
                 "dst": cdn_path, "regex": r['regex']}])
-                       
+                
     @task
     def stage_latest():
         """Copy version to latest within local cdn repository"""
+        _setup_env('loc')
+
         if 'version' in _config:
             version = _config['version']
         else:
@@ -376,7 +450,7 @@ else:
         clean(latest_cdn_path)
         static.copy(_config, [{
             "src": version_cdn_path, "dst": latest_cdn_path}])
-
+   
     @task
     def untag():
         """Delete a tag (in case of error)"""
@@ -384,70 +458,7 @@ else:
         if not version:
             abort('No available version tag')     
         git.delete_tag(version)
-
-
-    @task
-    def prd():
-        """Work on production environment."""
-        env.static_settings = 'prd'
-
     
-    @task
-    def stg():
-        """Work on staging environment."""
-        env.static_settings = 'stg'
- 
-    @task
-    @require_static_settings(allow=['prd','stg'], verbose=True)
-    def deploy():
-        """Deploy website to S3 bucket.  Specify environment using prd or stg tasks."""        
-    
-        # Activate local virtual environment (for render_templates+flask?)
-        local('. %s' % env.activate_path)        
-
-        if not os.path.exists(env.s3cmd_cfg):
-            abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
-                
-        if not 'deploy' in _config:
-            abort('Could not find "deploy" in config file')
-    
-        if not env.static_settings in _config['deploy']:
-            abort('Could not find "%(settings)s" in "deploy" in config file' % env)
-            
-        if not "bucket" in _config['deploy'][env.static_settings]:
-            abort('Could not find "bucket" in deploy.%(settings)s" in config file' % env)
-            
-        bucket = _config['deploy'][env.static_settings]['bucket']
- 
-        notice('deploying to %s' % bucket)
-       
-        if 'usemin_context' in _config['deploy'][env.static_settings]:
-            usemin_context = _config['deploy'][env.static_settings]['usemin_context']
-        else:
-            usemin_context = None
-            
-        template_path = join(env.project_path, 'website', 'templates')
-        deploy_path = join(env.project_path, 'build', 'website')
-    
-        clean(deploy_path)
-    
-        # render templates and run usemin
-        static.render_templates(template_path, deploy_path)   
-        static.usemin(_config, [deploy_path], usemin_context)
-    
-        # copy static files
-        static.copy(_config, [{
-            "src": join(env.project_path, 'website', 'static'),
-            "dst": join(deploy_path, 'static')
-        }])
-    
-        # additional copy?
-        if 'copy' in _config['deploy']:
-            static.copy(_config, _config['deploy']['copy'])
-   
-        # sync to S3
-        _s3cmd_sync(deploy_path, bucket)
-
 @task
 def branch(name):
     """Specify a branch other than master"""
@@ -457,7 +468,7 @@ def branch(name):
 def serve(ssl='n', port='5000'):
     """Run the development server"""
     if not 'project_path' in env:
-        loc()
+        _setup_env('loc')
 
     opts = ' -p '+port
     if do(ssl):
@@ -479,7 +490,10 @@ def serve(ssl='n', port='5000'):
                                         
 @task
 def dump():
-    """Dump env to stdout"""
+    """Dump env and config (if applicable) to stdout"""
     import pprint
     pprint.pprint(env)
+    
+    if _config:
+        print '\n', _config
   

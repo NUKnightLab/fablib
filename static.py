@@ -1,5 +1,5 @@
 """
-Static sites
+For building JS libraries and static sites deployed to s3 
 """
 import codecs
 import collections
@@ -8,7 +8,7 @@ import json
 import os
 import re
 import shutil
-from fabric.api import env, local, settings
+from fabric.api import local, settings
 from fabric.context_managers import hide
 from fabric.operations import prompt
 from fabric.utils import puts
@@ -22,10 +22,9 @@ BANNER = """
  */
 """.strip()
 
-
-def load_config():
-    """Read config.json and add 'date' and 'year'"""
-    with open(join(env.project_path, 'config.json')) as fp:
+def load_config(config_file):
+    """Read config.json, add date, year, paths"""
+    with open(config_file) as fp:
         s = fp.read()
         s = re.sub(r'^\s*//.*[\r\n]*', '', s, flags=re.MULTILINE)
         config = json.loads(s, object_pairs_hook=collections.OrderedDict)
@@ -33,17 +32,22 @@ def load_config():
     today = date.today()
     config['date'] = today
     config['year'] = today.year
+    
+    config['project_path'] = os.path.dirname(config_file)
+    config['root_path'] = os.path.dirname(config['project_path'])
+    config['source_path'] = os.path.join(config['project_path'], 'source')
+    config['build_path'] = os.path.join(config['project_path'], 'build')
     return config
             
-def find_file(file_name, cur_dir):
-    """Find a file.  Look first in cur_dir, then env.source_path"""
+def find_file(file_name, cur_dir, source_dir):
+    """Find a file.  Look first in cur_dir, then source_dir"""
     file_path = os.path.abspath(join(cur_dir, file_name))
     if os.path.exists(file_path):
         return file_path
-    for dirpath, dirs, files in os.walk(env.source_path):
+    for dirpath, dirs, files in os.walk(source_dir):
         if file_name in files:
             return join(dirpath, file_name)
-    raise Exception('Could not find "%s" in %s' % (file_name, env.source_path))
+    raise Exception('Could not find "%s" in %s' % (file_name, source_dir))
 
 def match_files(src, regex):
     """Return relative filepaths matching regex in src"""
@@ -99,7 +103,8 @@ def banner(config, param):
     Place banner at top of js and css files in-place.    
     """
     #_banner_text = BANNER % config
-
+    project_path = config['project_path']
+    
     def _do(file_path, banner_text):
         puts('banner:  %s' % file_path)  
         with open_file(file_path, 'r+') as fd:
@@ -109,7 +114,7 @@ def banner(config, param):
             fd.write(s)
         
     for r in param:
-        src = join(env.project_path, r['src'])
+        src = join(project_path, r['src'])
                 
         if 'template' in r:
             template = '\n'.join(r['template'])
@@ -127,10 +132,11 @@ def banner(config, param):
 def concat(config, param):
     """
     Concatenate files
-    """        
+    """   
+    project_path = config['project_path']     
     for r in param:
-        dst = join(env.project_path, r['dst']) 
-        src = map(lambda x: join(env.project_path, x), r['src'])      
+        dst = join(project_path, r['dst']) 
+        src = map(lambda x: join(project_path, x), r['src'])      
         makedirs(dst, isfile=True)
         local('cat %s > %s' % (' '.join(src), dst))
  
@@ -138,14 +144,16 @@ def copy(config, param):
     """
     Copy files
     """  
+    project_path = config['project_path']     
+
     def _do(src_path, dst_path):
         puts('  %s' % src_path)     
         makedirs(dst_path, isfile=True)
         shutil.copy2(src_path, dst_path)
         
     for r in param:
-        src = join(env.project_path, r['src'])
-        dst = join(env.project_path, r['dst'])
+        src = join(project_path, r['src'])
+        dst = join(project_path, r['dst'])
         puts('copy: %s >> %s' % (src, dst))
         if os.path.isdir(src):
             regex = r['regex'] if 'regex' in r else '.*'           
@@ -158,6 +166,8 @@ def lessc(config, param):
     """
     Compile LESS
     """        
+    project_path = config['project_path']     
+
     def _do(src_path, dst_path, opt):
         makedirs(dst_path, isfile=True)
         with hide('warnings'), settings(warn_only=True):
@@ -169,8 +179,8 @@ def lessc(config, param):
         abort('You must install the LESS compiler')
         
     for r in param:
-        src = join(env.project_path, r['src'])
-        dst = join(env.project_path, r['dst'])
+        src = join(project_path, r['src'])
+        dst = join(project_path, r['dst'])
         
         opt = r['opt'] if ('opt' in r) else ''
         
@@ -186,12 +196,14 @@ def minify(config, param):
     """
     Minify javascript 
     """       
+    project_path = config['project_path']     
+
     def _do(src_path, dst_path, opt):
         local('uglifyjs %s --output %s %s' % (src_path, dst_path, opt))
                    
     for r in param:
-        src = join(env.project_path, r['src'])
-        dst = join(env.project_path, r['dst'])
+        src = join(project_path, r['src'])
+        dst = join(project_path, r['dst'])
         puts('minify: %s >> %s' % (src, dst))
  
         opt = r['opt'] if ('opt' in r) else ''
@@ -210,6 +222,9 @@ def process(config, param):
     """
     Process codekit style imports
     """
+    project_path = config['project_path']
+    source_path = config['source_path']
+    
     _re_prepend = re.compile(r'@codekit-prepend\s*[\'"](?P<file>.+)[\'"]\s*;')
     _re_append = re.compile(r'@codekit-append\s*[\'"](?P<file>.+)[\'"]\s*;')
 
@@ -229,7 +244,7 @@ def process(config, param):
      
         # Write out prepends
         for m in _re_prepend.finditer(s):
-            file_path = find_file(m.group('file'), dirpath)
+            file_path = find_file(m.group('file'), dirpath, source_path)
             if not file_path in imported:
                 puts('  prepend: %s' % file_path)
                 imported.append(file_path)
@@ -241,15 +256,15 @@ def process(config, param):
         
         # Write out appends    
         for m in _re_append.finditer(s):
-            file_path = find_file(m.group('file'), dirpath)
+            file_path = find_file(m.group('file'), dirpath, source_path)
             if not file_path in imported:
                 puts('  append: %s' % file_path)
                 imported.append(file_path)
                 _do(f_out, file_path, imported)
               
     for r in param:
-        src = join(env.project_path, r['src'])
-        dst = join(env.project_path, r['dst'])       
+        src = join(project_path, r['src'])
+        dst = join(project_path, r['dst'])       
         puts('process: %s >> %s' % (src, dst))
      
         makedirs(dst, isfile=True)
@@ -275,6 +290,8 @@ def usemin(config, param, context=None):
     
     If context, treat as a string format for context.
     """
+    project_path = config['project_path']
+    
     _re_build = re.compile(r"""
         <!--\s*build:(?P<type>\css|js)\s+(?P<dest>\S+)\s*-->
         .*?
@@ -305,7 +322,7 @@ def usemin(config, param, context=None):
                 fd.truncate()
                       
     for r in param:
-        src = join(env.project_path, r)  
+        src = join(project_path, r)  
         puts('usemin: %s' % src)
 
         if os.path.isdir(src):            
