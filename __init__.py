@@ -173,7 +173,8 @@ if not _config or 'deploy' not in _config:
         ec2.setup_directories()
         git.clone_repo()
         ec2.setup_virtualenv()
-        ec2.build_django_siteconf()   
+        if env.django:
+            ec2.build_django_siteconf()   
         ec2.install_requirements()
 
     @task
