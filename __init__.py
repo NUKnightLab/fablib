@@ -143,7 +143,7 @@ def _confirm_branch():
 ############################################################
 # Dynamic web sites deployed to ec2
 ############################################################
-if 'deploy' not in _config:
+if not _config or 'deploy' not in _config:
     from . import apache, db, ec2
     from . import collectstatic_settings
 
