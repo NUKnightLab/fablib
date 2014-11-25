@@ -165,6 +165,18 @@ if not _config or 'deploy' not in _config:
         _setup_env('loc')    
 
     @task
+    @require_settings(allow=['stg','prd'])                    
+    def setup_by_host():
+        """Setup project environment, pass host argument (ignore roles)"""
+        ec2.setup_ssh()
+        ec2.setup_directories()
+        git.clone_repo()
+        ec2.setup_virtualenv()
+        if env.django:
+            ec2.build_django_siteconf()   
+        ec2.install_requirements()
+        
+    @task
     @roles('app','work')
     @require_settings(allow=['stg','prd'])                    
     def setup_project():
