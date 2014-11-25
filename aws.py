@@ -58,9 +58,10 @@ def lookup_ec2_instances():
     for r in get_ec2_reservations():
         for i in r.instances:
             m = regex.match(i.tags.get('Name', ''))
-            if m:
+            if m and i.public_dns_name:
                 env.roledefs[m.group('role')].append(
                     '%s@%s' % (env.app_user, i.public_dns_name))
+                    
                     
 def copy_from_s3(bucket_name, resource, dest_path):
     """Copy a resource from S3 to a remote file."""
