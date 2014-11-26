@@ -18,6 +18,7 @@ from .fos import clean, exists, join
 from .utils import notice, warn, abort, do, confirm, run_in_ve
 from . import aws, git, static
 
+print 'LOADED FABLIB'
    
 env.debug = False 
 env.python = 'python2.7'
@@ -29,7 +30,7 @@ if not 'django' in env:
     env.django = False
     
 #
-# Set path to s3cmd.cnf in secrets repository?
+# Set path to s3cmd.cnf in secrets repository
 #
 env.s3cmd_cfg = join(dirname(dirname(abspath(__file__))), 
     'secrets', 's3cmd.cfg')
@@ -41,6 +42,7 @@ if not os.path.exists(env.s3cmd_cfg):
 #
 _config = None
 DYNAMIC = True  # dynamic or static website?
+
 
 if not 'project_name' in env:
     abort('You must set env.project_name in your fabfile')
@@ -116,7 +118,7 @@ def _run_in_ve_local(command):
     Execute the command inside the local virtualenv.
     This is some hacky stuff that is only used in deploystatic.
     """
-    cur_settings = env.settings
+    cur_settings = env.settings    
     loc()
     run_in_ve(command)
     globals()[cur_settings]()  
@@ -217,14 +219,19 @@ if not _config or 'deploy' not in _config:
         
             if os.path.exists(static_root):
                 shutil.rmtree(static_root)   
-                
+                   
+            # Make it so that fablib module itself is not loaded        
+            #_run_in_ve_local('python manage.py collectstatic' \
+            #    ' --pythonpath="%s"' \
+            #    ' --settings=fablib.collectstatic_settings' \
+            #    % repo_dir)
             _run_in_ve_local('python manage.py collectstatic' \
-                ' --pythonpath="%s"' \
-                ' --settings=fablib.collectstatic_settings' \
+                ' --pythonpath="%s/fablib"' \
+                ' --settings=collectstatic_settings' \
                 % repo_dir)
         else:
             static_root = join(repo_dir, env.project_name, 'static')
-    
+            
         _s3cmd_sync(static_root, env.aws_storage_bucket)
             
         if env.django and os.path.exists(static_root):
