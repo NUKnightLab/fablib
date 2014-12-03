@@ -6,6 +6,7 @@ from fabric.decorators import roles
 from fabric.operations import prompt
 from fabric.utils import puts
 from .utils import abort, warn
+from .fos import exists
 
 
 _re_ready_status = r'(.*)\n(nothing to commit|Your branch is up-to-date)'
@@ -32,7 +33,8 @@ def checkout():
 @roles('app', 'work') 
 def clone_repo():
     """Clone the git repository."""
-    run('git clone %(repo_url)s %(project_path)s' % env)
+    if not exists(env.project_path):
+        run('git clone %(repo_url)s %(project_path)s' % env)
     
 def tags():
     """Get list of current tags"""
