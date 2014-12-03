@@ -18,7 +18,6 @@ from .fos import clean, exists, join
 from .utils import notice, warn, abort, do, confirm, run_in_ve
 from . import aws, git, static
 
-print 'LOADED FABLIB'
    
 env.debug = False 
 env.python = 'python2.7'
@@ -177,7 +176,7 @@ if not _config or 'deploy' not in _config:
         if env.django:
             ec2.build_django_siteconf()   
         ec2.install_requirements()
-        
+                 
     @task
     @roles('app','work')
     @require_settings(allow=['stg','prd'])                    
