@@ -27,7 +27,7 @@ def setup_ssh():
 def setup_directories():
     run('mkdir -p %(sites_path)s' % env)
     run('mkdir -p %(log_path)s' % env)
-    run('mkdir -p %(ve_path)s' % env)
+    run('mkdir -p %(env_path)s' % env)
 
 def setup_virtualenv():
     """Create a virtualenvironment."""
@@ -44,8 +44,8 @@ def build_django_siteconf():
 @roles('app', 'work')
 def install_requirements():
     with cd(env.project_path):
-        if exists('requirements.txt'):
-            run_in_ve('pip install -r requirements.txt')
+        if exists(env.requirements_file):
+            run_in_ve('pip install -r %s' % env.requirements_file)
 
 
 
