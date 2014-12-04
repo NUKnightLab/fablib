@@ -20,7 +20,7 @@ def link_conf(maint=False):
         link_file = APACHE_MAINTENANCE_CONF_NAME
     else:
         link_file = APACHE_CONF_NAME
-    apache_conf = join(env.project_path, 'conf', env.settings, link_file)
+    apache_conf = join(env.project_path, env.conf_dir, env.settings, link_file)
     if exists(apache_conf):
         run('mkdir -p %(apache_path)s' % env)
         link_path = join(env.apache_path, env.project_name)

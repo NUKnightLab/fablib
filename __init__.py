@@ -27,6 +27,9 @@ env.branch = 'master'       # DEFAULT BRANCH
 
 if not 'django' in env:
     env.django = False
+
+if not 'conf_dir' in env:
+    env.conf_dir = 'conf'
     
 #
 # Set path to s3cmd.cnf in secrets repository
