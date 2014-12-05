@@ -31,8 +31,8 @@ def setup_directories():
 
 def setup_virtualenv():
     """Create a virtualenvironment."""
-    if not exists(env.ve_path):
-        run('virtualenv -p %(python)s %(ve_path)s' % env)
+    #if not exists(env.ve_path):
+    run('virtualenv -p %(python)s %(ve_path)s' % env)
 
 @roles('app', 'work') 
 def build_django_siteconf():
