@@ -30,6 +30,9 @@ if not 'django' in env:
 
 if not 'conf_dir' in env:
     env.conf_dir = 'conf'
+
+if not 'requirements_file' in env:
+    env.requirements_file = 'requirements.txt'
     
 #
 # Set path to s3cmd.cnf in secrets repository
