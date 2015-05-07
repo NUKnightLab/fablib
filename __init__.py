@@ -330,8 +330,8 @@ else:
         }])
 
         # additional copy?
-        if 'copy' in _config['deploy']:
-            static.copy(_config, _config['deploy']['copy'])
+        if 'copy' in _config['deploy'][env_type]:
+            static.copy(_config, _config['deploy'][env_type]['copy'])
 
         # sync to S3
         _s3cmd_sync(deploy_path, bucket)
