@@ -134,10 +134,6 @@ def _s3cmd_sync(src_path, bucket):
     repo_dir = dirname(dirname(os.path.abspath(__file__)))
      
     with lcd(repo_dir):
-        # temp dev code -- delete everything in the bucket
-        #local('fablib/bin/s3cmd --config=%s del -r --force s3://%s/' \
-        #        % (env.s3cmd_cfg, bucket))
-
         local('fablib/bin/s3cmd --config=%s sync' \
                 ' --rexclude ".*/\.[^/]*$"' \
                 ' --delete-removed --acl-public' \
@@ -293,6 +289,35 @@ if not _config or 'deploy' not in _config:
 # Static websites deployed to S3
 ############################################################
 else:
+    @task 
+    def undeploy(env_type):
+        """Delete website from S3 bucket.  Specify stg|prd as argument."""
+        _setup_env('loc') 
+
+        # Activate local virtual environment (for render_templates+flask?)
+        local('. %s' % env.activate_path)        
+
+        if not os.path.exists(env.s3cmd_cfg):
+            abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
+
+        if not env_type in _config['deploy']:
+            abort('Could not find "%s" in "deploy" in config file' % env_type)
+        
+        if not "bucket" in _config['deploy'][env_type]:
+            abort('Could not find "bucket" in deploy.%s" in config file' % env_type)
+        
+        bucket = _config['deploy'][env_type]['bucket']
+
+        warn('YOU ARE ABOUT TO DELETE EVERYTHING IN %s' % bucket)
+        if not do(prompt("Are you ABSOLUTELY sure you want to do this? (y/n): ").strip()):
+            abort('Aborting.')   
+        
+        repo_dir = dirname(dirname(os.path.abspath(__file__)))
+     
+        with lcd(repo_dir):
+            local('fablib/bin/s3cmd --config=%s del -r --force s3://%s/' \
+                % (env.s3cmd_cfg, bucket))
+        
     @task
     def deploy(env_type):
         """Deploy website to S3 bucket.  Specify stg|prd as argument."""            
