@@ -134,9 +134,14 @@ def _s3cmd_sync(src_path, bucket):
     repo_dir = dirname(dirname(os.path.abspath(__file__)))
      
     with lcd(repo_dir):
+        # temp dev code -- delete everything in the bucket
+        #local('fablib/bin/s3cmd --config=%s del -r --force s3://%s/' \
+        #        % (env.s3cmd_cfg, bucket))
+
         local('fablib/bin/s3cmd --config=%s sync' \
                 ' --rexclude ".*/\.[^/]*$"' \
                 ' --delete-removed --acl-public' \
+                ' --add-header="Cache-Control:max-age=60"' \
                 ' %s/ s3://%s/' \
                 % (env.s3cmd_cfg, src_path, bucket))
   
