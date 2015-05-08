@@ -129,6 +129,18 @@ def _run_in_ve_local(command):
     globals()[cur_settings]()  
 
 
+def _s3cmd_put(src_path, bucket):
+    """Copy local directory to S3 bucket"""
+    repo_dir = dirname(dirname(os.path.abspath(__file__)))
+    
+    with lcd(repo_dir):
+        local('fablib/bin/s3cmd --config=%s put --dry-run' \
+                ' --rexclude ".*/\.[^/]*$"' \
+                ' --acl-public' \
+                ' --add-header="Cache-Control:max-age=300"' \
+                ' -r %s/ s3://%s/' \
+                % (env.s3cmd_cfg, src_path, bucket))
+   
 def _s3cmd_sync(src_path, bucket):
     """Sync local directory with S3 bucket"""
     repo_dir = dirname(dirname(os.path.abspath(__file__)))
@@ -137,7 +149,7 @@ def _s3cmd_sync(src_path, bucket):
         local('fablib/bin/s3cmd --config=%s sync' \
                 ' --rexclude ".*/\.[^/]*$"' \
                 ' --delete-removed --acl-public' \
-                ' --add-header="Cache-Control:max-age=60"' \
+                ' --add-header="Cache-Control:max-age=300"' \
                 ' %s/ s3://%s/' \
                 % (env.s3cmd_cfg, src_path, bucket))
   
@@ -288,7 +300,7 @@ if not _config or 'deploy' not in _config:
 ############################################################
 # Static websites deployed to S3
 ############################################################
-else:
+else:        
     @task 
     def undeploy(env_type):
         """Delete website from S3 bucket.  Specify stg|prd as argument."""
@@ -317,6 +329,54 @@ else:
         with lcd(repo_dir):
             local('fablib/bin/s3cmd --config=%s del -r --force s3://%s/' \
                 % (env.s3cmd_cfg, bucket))
+
+    @task 
+    def put(env_type):
+        """Put (copy) website to S3 bucket.  Specify stg|prd as argument."""
+        _setup_env('loc') 
+        
+        # Activate local virtual environment (for render_templates+flask?)
+        local('. %s' % env.activate_path)        
+
+        if not os.path.exists(env.s3cmd_cfg):
+            abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
+                
+        if not env_type in _config['deploy']:
+            abort('Could not find "%s" in "deploy" in config file' % env_type)
+        
+        if not "bucket" in _config['deploy'][env_type]:
+            abort('Could not find "bucket" in deploy.%s" in config file' % env_type)
+        
+        bucket = _config['deploy'][env_type]['bucket']
+
+        notice('deploying to %s' % bucket)
+   
+        if 'usemin_context' in _config['deploy'][env_type]:
+            usemin_context = _config['deploy'][env_type]['usemin_context']
+        else:
+            usemin_context = None
+        
+        template_path = join(_config['project_path'], 'website', 'templates')
+        deploy_path = join(_config['project_path'], 'build', 'website')
+
+        clean(deploy_path)
+
+        # render templates and run usemin
+        static.render_templates(template_path, deploy_path)   
+        static.usemin(_config, [deploy_path], usemin_context)
+
+        # copy static files
+        static.copy(_config, [{
+            "src": join(_config['project_path'], 'website', 'static'),
+            "dst": join(deploy_path, 'static')
+        }])
+
+        # additional copy?
+        if 'copy' in _config['deploy'][env_type]:
+            static.copy(_config, _config['deploy'][env_type]['copy'])      
+
+        # copy to S3
+        _s3cmd_put(deploy_path, bucket)
         
     @task
     def deploy(env_type):
@@ -365,7 +425,7 @@ else:
 
         # sync to S3
         _s3cmd_sync(deploy_path, bucket)
- 
+         
 
 ############################################################
 # JS libraries
