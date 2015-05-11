@@ -330,57 +330,9 @@ else:
             local('fablib/bin/s3cmd --config=%s del -r --force s3://%s/' \
                 % (env.s3cmd_cfg, bucket))
 
-    @task 
-    def put(env_type):
-        """Put (copy) website to S3 bucket.  Specify stg|prd as argument."""
-        _setup_env('loc') 
-        
-        # Activate local virtual environment (for render_templates+flask?)
-        local('. %s' % env.activate_path)        
-
-        if not os.path.exists(env.s3cmd_cfg):
-            abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
-                
-        if not env_type in _config['deploy']:
-            abort('Could not find "%s" in "deploy" in config file' % env_type)
-        
-        if not "bucket" in _config['deploy'][env_type]:
-            abort('Could not find "bucket" in deploy.%s" in config file' % env_type)
-        
-        bucket = _config['deploy'][env_type]['bucket']
-
-        notice('deploying to %s' % bucket)
-   
-        if 'usemin_context' in _config['deploy'][env_type]:
-            usemin_context = _config['deploy'][env_type]['usemin_context']
-        else:
-            usemin_context = None
-        
-        template_path = join(_config['project_path'], 'website', 'templates')
-        deploy_path = join(_config['project_path'], 'build', 'website')
-
-        clean(deploy_path)
-
-        # render templates and run usemin
-        static.render_templates(template_path, deploy_path)   
-        static.usemin(_config, [deploy_path], usemin_context)
-
-        # copy static files
-        static.copy(_config, [{
-            "src": join(_config['project_path'], 'website', 'static'),
-            "dst": join(deploy_path, 'static')
-        }])
-
-        # additional copy?
-        if 'copy' in _config['deploy'][env_type]:
-            static.copy(_config, _config['deploy'][env_type]['copy'])      
-
-        # copy to S3
-        _s3cmd_put(deploy_path, bucket)
-        
     @task
-    def deploy(env_type):
-        """Deploy website to S3 bucket.  Specify stg|prd as argument."""            
+    def render(env_type):   
+        """Render templates (deploy except for actual sync with S3)"""
         _setup_env('loc') 
         
         # Activate local virtual environment (for render_templates+flask?)
@@ -394,11 +346,7 @@ else:
         
         if not "bucket" in _config['deploy'][env_type]:
             abort('Could not find "bucket" in deploy.%s" in config file' % env_type)
-        
-        bucket = _config['deploy'][env_type]['bucket']
-
-        notice('deploying to %s' % bucket)
-   
+           
         if 'usemin_context' in _config['deploy'][env_type]:
             usemin_context = _config['deploy'][env_type]['usemin_context']
         else:
@@ -410,7 +358,12 @@ else:
         clean(deploy_path)
 
         # render templates and run usemin
-        static.render_templates(template_path, deploy_path)   
+        if 'deploy_context' in _config['deploy'][env_type]:
+            deploy_context = _config['deploy'][env_type]['deploy_context']
+        else:
+            deploy_context = {}
+            
+        static.render_templates(template_path, deploy_path, deploy_context)   
         static.usemin(_config, [deploy_path], usemin_context)
 
         # copy static files
@@ -423,7 +376,29 @@ else:
         if 'copy' in _config['deploy'][env_type]:
             static.copy(_config, _config['deploy'][env_type]['copy'])
 
+    @task 
+    def put(env_type):
+        """Put (copy) website to S3 bucket.  Specify stg|prd as argument."""
+        render(env_type)
+        
+        bucket = _config['deploy'][env_type]['bucket']
+        notice('copying to %s' % bucket)
+           
+        # copy to S3
+        deploy_path = join(_config['project_path'], 'build', 'website')
+        _s3cmd_put(deploy_path, bucket)
+             
+    @task
+    def deploy(env_type):
+        """Deploy website to S3 bucket.  Specify stg|prd as argument."""  
+        
+        render(env_type)
+                         
+        bucket = _config['deploy'][env_type]['bucket']
+        notice('deploying to %s' % bucket)
+   
         # sync to S3
+        deploy_path = join(_config['project_path'], 'build', 'website')
         _s3cmd_sync(deploy_path, bucket)
          
 

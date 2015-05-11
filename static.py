@@ -74,7 +74,7 @@ def open_file(path, mode, encoding=''):
                 encoding = 'utf-8'    
     return codecs.open(path, mode, encoding) 
        
-def render_templates(src_path, dst_path):
+def render_templates(src_path, dst_path, extra_context):
     """Render flask templates"""
     puts('render: %s >> %s' % (src_path, dst_path))        
     from website import app
@@ -86,7 +86,7 @@ def render_templates(src_path, dst_path):
         with app.app.test_request_context():
             g.compile_includes = True
             g.compiled_includes = compiled_includes
-            content = app.catch_all(f)
+            content = app.catch_all(f, extra_context)
             compiled_includes = g.compiled_includes
 
         page_file = join(dst_path, f)
