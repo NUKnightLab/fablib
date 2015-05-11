@@ -134,7 +134,7 @@ def _s3cmd_put(src_path, bucket):
     repo_dir = dirname(dirname(os.path.abspath(__file__)))
     
     with lcd(repo_dir):
-        local('fablib/bin/s3cmd --config=%s put --dry-run' \
+        local('fablib/bin/s3cmd --config=%s put' \
                 ' --rexclude ".*/\.[^/]*$"' \
                 ' --acl-public' \
                 ' --add-header="Cache-Control:max-age=300"' \
