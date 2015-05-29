@@ -363,6 +363,10 @@ else:
         else:
             deploy_context = {}
             
+        # sometimes we need this path append to import app from website
+        # in render_templates, dunno why:
+        sys.path.append(_config['project_path'])
+        
         static.render_templates(template_path, deploy_path, deploy_context)   
         static.usemin(_config, [deploy_path], usemin_context)
 
