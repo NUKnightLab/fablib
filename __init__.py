@@ -473,7 +473,8 @@ if _config:
         
         # Commit/push/tag
         with lcd(env.project_path):
-            local('git add build')
+            with settings(warn_only=True):
+                local('git add build')
             # support builds where there's no change; sometimes comes up when 
             # reusing a tag because of an unexpected problem
             with settings(warn_only=True):
