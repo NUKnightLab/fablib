@@ -441,8 +441,6 @@ if _config:
         if not 'version' in _config:
             _config['version'] = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
             warn('Using development version value "%(version)s"' % _config)
-            if not do(prompt("Continue? (y/n): ").strip()):
-                abort('Aborting.')      
     
         notice('Building version %(version)s...' % _config)
 
