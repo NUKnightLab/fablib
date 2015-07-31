@@ -45,13 +45,16 @@ def tags():
         with cd(env.project_path):
             tags = run('cd %(project_path)s;git tag' % env)      
     if tags:
-        return [x.strip() for x in tags.strip().split('\n')]
+        stripped = [x.strip() for x in tags.strip().split('\n')]
+        re_num = re.compile('[^0-9.]')
+        sorted_tags = reversed(sorted([map(int, re_num.sub('', t).split('.')) for t in stripped]))
+        rebuilt = ['.'.join(map(str,t)) for t in sorted_tags]
+        return rebuilt
     return []
  
 def last_tag():
     """Get the last version tag"""
-    re_num = re.compile('[^0-9.]')
-    tag_list = sorted([map(int, re_num.sub('', t).split('.')) for t in tags()])
+    tag_list = tags()
     if tag_list:
         return '.'.join(map(str, tag_list[-1]))
     return None  
