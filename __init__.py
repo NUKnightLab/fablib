@@ -463,7 +463,7 @@ if _config:
         exists(dirname(env.cdn_path), required=True)
     
         # Ask user for a new version
-        _config['version'] = git.prompt_tag('Enter a new version number: ',
+        _config['version'] = git.prompt_tag('Enter a new version number',
             unique=True) 
              
         # Build version   
