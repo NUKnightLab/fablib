@@ -1,14 +1,9 @@
 """
 Amazon Web Services
 """
-import os
-import re
-import sys
-import tempfile
 import boto
-from fabric.api import env, put
-from .decorators import require_settings
 from .utils import abort
+
 
 AWS_CREDENTIALS_ERR_MSG = """
     Unable to connect to AWS. Check your credentials. boto attempts to
@@ -18,83 +13,18 @@ AWS_CREDENTIALS_ERR_MSG = """
     http://boto.readthedocs.org/en/latest/boto_config_tut.html#credentials
 """
 
-_ec2_con = None
-_s3_con = None
-_route53_con = None
 
-def get_ec2_con():
-    """Get an EC2 connection."""
-    global _ec2_con
-    if _ec2_con is None:
-        try:
-            _ec2_con = boto.connect_ec2()
-        except boto.exception.NoAuthHandlerFound:
-            print AWS_CREDENTIALS_ERR_MSG
-            sys.exit(0)
-    return _ec2_con
+_s3_con = None
+
     
 def get_s3_con():
     """Get an S3 connection."""
     global _s3_con
+    
     if _s3_con is None:
         try:
             _s3_con = boto.connect_s3()
         except boto.exception.NoAuthHandlerFound:
-            print AWS_CREDENTIALS_ERR_MSG
-            sys.exit(0)
+            abort(AWS_CREDENTIALS_ERR_MSG)
     return _s3_con
-
-def get_route53_con():
-    """Get a Route53 connection"""
-    global _route53_con
-    if _route53_con is None:
-        try:
-            _route53_con = boto.connect_route53()
-        except boto.exception.NoAuthHandlerFound:
-            print AWS_CREDENTIALS_ERR_MSG
-            sys.exit(0)
-    return _route53_con
-
-
-def get_ec2_reservations():
-    try:
-        return get_ec2_con().get_all_instances()
-    except boto.exception.EC2ResponseError, e:
-        abort('Received error from AWS. Are your credentials correct?' \
-            'Note: do not quote keys in boto config files.' \
-            '\nError from Amazon was:\n'+str(e))
-
-def get_route53_cnames():
-    """Get mapping of CNAME record values to names"""    
-    name_map = {}
-    conn = get_route53_con()
-    for zone in conn.get_zones():        
-        for record in zone.get_records():
-            if record.type == 'CNAME' and len(record.resource_records):
-                name_map[record.resource_records[0]] = record.name.strip('.')
-    return name_map
        
-def lookup_ec2_instances():
-    """Load the EC2 instances by role definition into env.roledefs"""
-    name_map = get_route53_cnames()
-    
-    regex = re.compile(r'^%s-(?P<role>[a-zA-Z]+)[0-9]+$' % env.settings)
-    for r in get_ec2_reservations():
-        for i in r.instances:
-            m = regex.match(i.tags.get('Name', ''))
-            if m and i.public_dns_name:
-                h_name = i.public_dns_name
-                if i.public_dns_name in name_map:
-                    h_name = name_map[i.public_dns_name]
-                env.roledefs[m.group('role')].append(
-                    '%s@%s' % (env.app_user, h_name))
-                     
-def copy_from_s3(bucket_name, resource, dest_path):
-    """Copy a resource from S3 to a remote file."""
-    bucket = get_s3_con().get_bucket(bucket_name)
-    key = bucket.lookup(resource)
-    f = tempfile.NamedTemporaryFile(delete=False)
-    key.get_file(f)
-    f.close()
-    put(f.name, dest_path)
-    os.unlink(f.name)

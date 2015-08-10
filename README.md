@@ -39,7 +39,7 @@ It is assumed that all of your repositories are in a common directory and that y
 
 ### Usage
 
-Each project should contain a `fabfile.py` at the top level of the project repository.  It should look like the following sample below.  Typically, you would only need to make sure that `env.django` is set to the proper value of `True` or `False` depending on whether or not your project uses django.
+Each project should contain a `fabfile.py` at the top level of the project repository.  It should look like the following sample below.  
 
 Once you have created your project `fabfile.py`, you can run `fab -l` to see the available Fabric commands.
 
@@ -52,7 +52,6 @@ Once you have created your project `fabfile.py`, you can run `fab -l` to see the
     # Project-specific settings, alter as needed
     #
     env.project_name = basename(dirname(__file__))
-    env.django = True
 
     #
     # Add paths

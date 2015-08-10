@@ -22,6 +22,7 @@ BANNER = """
  */
 """.strip()
 
+
 def load_config(config_file):
     """Read config.json, add date, year, paths"""
     with open(config_file) as fp:
@@ -38,6 +39,7 @@ def load_config(config_file):
     config['source_path'] = os.path.join(config['project_path'], 'source')
     config['build_path'] = os.path.join(config['project_path'], 'build')
     return config
+
             
 def find_file(file_name, cur_dir, source_dir):
     """Find a file.  Look first in cur_dir, then source_dir"""
@@ -48,6 +50,7 @@ def find_file(file_name, cur_dir, source_dir):
         if file_name in files:
             return join(dirpath, file_name)
     raise Exception('Could not find "%s" in %s' % (file_name, source_dir))
+
 
 def match_files(src, regex):
     """Return relative filepaths matching regex in src"""
@@ -61,6 +64,7 @@ def match_files(src, regex):
             if re_match.match(relative_path):   
                 yield relative_path
 
+
 def open_file(path, mode, encoding=''):
     """Open a file with character encoding detection"""   
     if mode.startswith('r'):
@@ -73,7 +77,8 @@ def open_file(path, mode, encoding=''):
             else:
                 encoding = 'utf-8'    
     return codecs.open(path, mode, encoding) 
-       
+
+
 def render_templates(src_path, dst_path, extra_context):
     """Render flask templates"""
     puts('render: %s >> %s' % (src_path, dst_path))        
@@ -94,6 +99,7 @@ def render_templates(src_path, dst_path, extra_context):
         makedirs(page_file, isfile=True)
         with open(page_file, 'w') as fd:
             fd.write(content.encode('utf-8'))
+
 
 #
 # Main operations
@@ -129,6 +135,7 @@ def banner(config, param):
         else:
             _do(src, banner_text)
 
+
 def concat(config, param):
     """
     Concatenate files
@@ -139,6 +146,7 @@ def concat(config, param):
         src = map(lambda x: join(project_path, x), r['src'])      
         makedirs(dst, isfile=True)
         local('cat %s > %s' % (' '.join(src), dst))
+
  
 def copy(config, param):
     """
@@ -161,6 +169,7 @@ def copy(config, param):
                 _do(join(src, f), join(dst, f))
         else:   
             _do(src, dst)             
+
 
 def lessc(config, param):
     """
@@ -192,6 +201,7 @@ def lessc(config, param):
         else:
             _do(src, dst, opt)             
 
+
 def minify(config, param):
     """
     Minify javascript 
@@ -217,6 +227,7 @@ def minify(config, param):
         else:                
             makedirs(dst, isfile=True)
             _do(src, dst, opt)
+
 
 def process(config, param):
     """
@@ -270,6 +281,7 @@ def process(config, param):
         makedirs(dst, isfile=True)
         with open_file(dst, 'w', 'utf-8') as out_file:
             _do(out_file, src, [])
+
 
 def usemin(config, param, context=None):
     """
