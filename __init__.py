@@ -6,6 +6,8 @@ import os
 from os.path import abspath, dirname
 import sys
 from datetime import datetime
+import zipfile
+import zlib
 from fabric.api import env, put, local, settings, hide
 from fabric.context_managers import lcd
 from fabric.decorators import task
@@ -45,7 +47,6 @@ try:
 except IOError:
     notice('No config found @ %s' % config_json_path)
 
-   
 
 def _setup_env():
     """Setup the local working environment."""    
@@ -83,7 +84,8 @@ def _s3cmd_sync(src_path, bucket):
                 ' %s/ s3://%s/' \
                 % (env.s3cmd_cfg, src_path, bucket))
 
-  
+ 
+ 
 ############################################################
 # JS libraries
 ############################################################
@@ -92,6 +94,15 @@ if _config:
     # Set env.cdn_path = path to cdn repository   
     env.cdn_path = abspath(join(_config['root_path'], 
         'cdn.knightlab.com', 'app', 'libs', _config['name']))
+
+
+    def _make_zip(file_path):
+        notice('Creating zip file: %s' % file_path)
+        with zipfile.ZipFile(file_path, 'w', zipfile.ZIP_DEFLATED) as f_zip:
+            for r in _config['stage']:
+                static.add_zip_files(f_zip, _config, [{
+                    "src": r['src'],
+                    "dst": _config['name'], "regex": r['regex']}])
 
 
     @task
@@ -161,8 +172,11 @@ if _config:
             static.copy(_config, [{
                 "src": r['src'],
                 "dst": cdn_path, "regex": r['regex']}])
-
-
+                
+        # Create zip file in local CDN repository
+        _make_zip(cdn_path, '%(name)s.zip' % _config)
+  
+            
     @task
     def stage_dev():
         """
@@ -188,7 +202,10 @@ if _config:
             static.copy(_config, [{
                 "src": r['src'],
                 "dst": cdn_path, "regex": r['regex']}])
-
+                
+        # Create zip file in local CDN repository
+        _make_zip(join(cdn_path, '%(name)s.zip' % _config))
+        
                 
     @task
     def stage_latest():

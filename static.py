@@ -101,6 +101,26 @@ def render_templates(src_path, dst_path, extra_context):
             fd.write(content.encode('utf-8'))
 
 
+def add_zip_files(zip_file, config, param):
+    """
+    Add files to zip_file
+    """
+    project_path = config['project_path']     
+
+    for r in param:
+        src = join(project_path, r['src'])
+        dst = r['dst']
+        puts('add: %s >> %s' % (src, dst))
+        if os.path.isdir(src):
+            regex = r['regex'] if 'regex' in r else '.*'           
+            for f in match_files(src, regex):
+                puts('add: %s >> %s' % (join(src, f), join(dst, f)))
+                zip_file.write(join(src, f),  join(dst, f))
+        else:   
+            puts('add: %s >> %s' % (src, dst))
+            zip_file.write(src, dst)           
+
+
 #
 # Main operations
 #           
@@ -168,8 +188,8 @@ def copy(config, param):
             for f in match_files(src, regex):
                 _do(join(src, f), join(dst, f))
         else:   
-            _do(src, dst)             
-
+            _do(src, dst)                
+    
 
 def lessc(config, param):
     """
