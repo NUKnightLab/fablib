@@ -12,6 +12,7 @@ from fabric.api import env, put, local, settings, hide
 from fabric.context_managers import lcd
 from fabric.decorators import task
 from fabric.operations import prompt
+from fabric.tasks import execute
 from .fos import clean, exists, join
 from .utils import notice, warn, abort, do, confirm
 from . import aws, git, static
@@ -145,7 +146,8 @@ if _config:
             unique=True)
 
         # Build version
-        build()
+        # use execute to allow for other implementations of 'build'
+        execute('build')
 
         # Commit/push/tag
         with lcd(env.project_path):
