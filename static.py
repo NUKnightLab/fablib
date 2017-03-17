@@ -364,5 +364,6 @@ def usemin(config, param, context=None):
             _do(src)
 
 def npm_run(config, param):
-    for task in param['tasks']:
+    """Value of `param` should be an array of strings whose values are npm tasks valid for the current project."""
+    for task in param:
         local('npm run {}'.format(task))
