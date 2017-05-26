@@ -32,9 +32,6 @@ env.sites_path = dirname(dirname(abspath(__file__)))
 # Set path to s3cmd.cnf in secrets repository
 #
 env.s3cmd_cfg = join(env.sites_path, 'secrets', 's3cmd.cfg')
-if not os.path.exists(env.s3cmd_cfg):
-    warn("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'." \
-         "  You will not be able to deploy.")
 
 #
 # Load config.json from project directory?
@@ -66,6 +63,9 @@ def _setup_env():
 
 def _s3cmd_put(src_path, bucket):
     """Copy local directory to S3 bucket"""
+    if not os.path.exists(env.s3cmd_cfg):
+        abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'." % env)
+
     with lcd(env.sites_path):
         local('fablib/bin/s3cmd --config=%s put' \
                 ' --rexclude ".*/\.[^/]*$"' \
@@ -77,6 +77,10 @@ def _s3cmd_put(src_path, bucket):
 
 def _s3cmd_sync(src_path, bucket):
     """Sync local directory with S3 bucket"""
+
+    if not os.path.exists(env.s3cmd_cfg):
+        abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'." % env)
+
     with lcd(env.sites_path):
         local('fablib/bin/s3cmd --config=%s sync' \
                 ' --rexclude ".*/\.[^/]*$"' \
