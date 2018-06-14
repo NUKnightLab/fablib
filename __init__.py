@@ -86,6 +86,7 @@ def _s3cmd_sync(src_path, bucket):
                 ' --rexclude ".*/\.[^/]*$"' \
                 ' --delete-removed --acl-public' \
                 ' --add-header="Cache-Control:max-age=300"' \
+                ' --no-preserve' \
                 ' %s/ s3://%s/' \
                 % (env.s3cmd_cfg, src_path, bucket))
 
