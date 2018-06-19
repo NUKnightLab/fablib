@@ -6,8 +6,6 @@ We're making the repository public mostly so that people who want to work on our
 
 KnightLab projects are written to assume that this directory is "alongside" directories (checked out git repositories) that use it. Gradually, we'll probably switch to using PIP SSH urls to make it available as an install, but for now, you may need to clone it accordingly.
 
-If you're just using this because it's needed by StoryMapJS or another javascript project, you don't need to read further.
-
 ### Requirements
 
  [Node.js](http://nodejs.org)
@@ -20,6 +18,7 @@ If you're just using this because it's needed by StoryMapJS or another javascrip
  
     # npm install uglify-js -g 
 
+If you're just using this because it's needed by StoryMapJS or another javascript project, you don't need to read further.
 
 ### Setup
 
